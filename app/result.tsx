@@ -170,7 +170,8 @@ export default function ResultScreen() {
     const streakText = loginStreak >= 2 ? ` ${loginStreak}\u65E5\u9023\u7D9A\uD83D\uDD25` : "";
     const dailyPrefix = dailyMode ? "\uD83D\uDCC5 \u30C7\u30A4\u30EA\u30FC\u6311\u6226 " : "";
     const dailyTags = dailyMode ? " #\u9854\u30D0\u30C8\u30EB\u30C7\u30A4\u30EA\u30FC #FaceFightDaily" : "";
-    const text = `${dailyPrefix}\u9854\u30D0\u30C8\u30EB ${stageName}${streakText} ${won ? "\u30AF\u30EA\u30A2\uFF01" : "\u6311\u6226\u4E2D..."}\n${RANK_EMOJIS[rank]} \u30E9\u30F3\u30AF${rank} \uD83D\uDC4A\u30B9\u30B3\u30A2${score.toLocaleString()} \u30B3\u30F3\u30DC x${maxCombo}\n#\u9854\u30D0\u30C8\u30EB #FaceFight #\u8868\u60C5\u30B2\u30FC\u30E0${dailyTags}`;
+    const challengeMsg = won ? `\u3053\u306E\u8868\u60C5\u3067\u52DD\u3063\u305F\uFF01\u5148\u306B\u539F\u5BB9\u3092\u4E0B\u308D\u3057\u3066\u307F\u3066` : `\u8868\u60C5\u3067\u52D5\u304B\u3059\u30A2\u30AF\u30B7\u30E7\u30F3RPG`;
+    const text = `${dailyPrefix}\uD83D\uDCA5 ${challengeMsg}\n\u9854\u30D0\u30C8\u30EB ${stageName}${streakText} ${won ? "\u30AF\u30EA\u30A2\uFF01" : "\u6311\u6226\u4E2D..."}\n${RANK_EMOJIS[rank]} \u30E9\u30F3\u30AF${rank} \uD83D\uDC4A\u30B9\u30B3\u30A2${score.toLocaleString()} \u30B3\u30F3\u30DC x${maxCombo}\n#\u9854\u30D0\u30C8\u30EB #FaceFight #\u8868\u60C5\u30B2\u30FC\u30E0 #\u30AB\u30E1\u30E9\u30B2\u30FC\u30E0${dailyTags}`;
 
     if (Platform.OS === "web") {
       // Try Web Share API with share card image

@@ -214,6 +214,17 @@ export default function BattleScreen() {
   useEffect(() => {
     const enemyHpPct = state.currentEnemy ? (state.enemyHP / state.currentEnemy.hp) * 100 : 0;
     Animated.timing(enemyHpAnim, { toValue: Math.max(0, enemyHpPct), duration: 300, useNativeDriver: false }).start();
+    // 激怒モード突入検知（HP30%以下かつ前回は30%超）
+    if (state.currentEnemy && enemyHpPct <= 30 && enemyHpPct > 0) {
+      // 敵キャラ激怒バウンス演出（既存enemyBounceAnimを流用）
+      Animated.sequence([
+        Animated.timing(enemyBounceAnim, { toValue: -20, duration: 80, useNativeDriver: true }),
+        Animated.timing(enemyBounceAnim, { toValue: 20, duration: 80, useNativeDriver: true }),
+        Animated.timing(enemyBounceAnim, { toValue: -15, duration: 60, useNativeDriver: true }),
+        Animated.timing(enemyBounceAnim, { toValue: 15, duration: 60, useNativeDriver: true }),
+        Animated.timing(enemyBounceAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
+      ]).start();
+    }
   }, [state.enemyHP, state.currentEnemy]);
 
   // BGM: start on fight, stop on win/lose, pause on paused
@@ -802,6 +813,11 @@ export default function BattleScreen() {
           </View>
           {enemyHpRatio <= 0.5 && (
             <Text style={styles.enragedBadge}>{"\uD83D\uDE21 \u6FC3\u6012\uFF01"}</Text>
+          )}
+          {state.currentEnemy && (state.enemyHP / state.currentEnemy.hp) <= 0.3 && state.enemyHP > 0 && (
+            <Text style={{ color: '#FF4444', fontSize: 11, fontWeight: 'bold', textAlign: 'center', marginTop: 2 }}>
+              {'\uD83D\uDD25 \u6FC3\u6012\u30E2\u30FC\u30C9\uFF01'}
+            </Text>
           )}
           <View style={styles.weaknessRow}>
             <Text style={styles.weaknessLabel}>{"\u5F31\u70B9:"}</Text>
