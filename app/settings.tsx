@@ -85,6 +85,15 @@ export default function SettingsScreen() {
 
         <ToggleRow label="Face Mesh" value={settings.showFaceMesh} onToggle={() => toggleSetting("showFaceMesh")} />
 
+        <TouchableOpacity
+          style={calibrationStyles.calibrateBtn}
+          onPress={() => {
+            Alert.alert("\u30AD\u30E3\u30EA\u30D6\u30EC\u30FC\u30B7\u30E7\u30F3", "\u6B21\u56DE\u306E\u30D0\u30C8\u30EB\u958B\u59CB\u6642\u306B\u30AD\u30E3\u30EA\u30D6\u30EC\u30FC\u30B7\u30E7\u30F3\u304C\u5B9F\u884C\u3055\u308C\u307E\u3059\u3002\u6B63\u9762\u3092\u5411\u3044\u3066\u30AB\u30E1\u30E9\u306B\u9854\u3092\u5408\u308F\u305B\u3066\u304F\u3060\u3055\u3044\u3002");
+          }}
+        >
+          <Text style={calibrationStyles.calibrateBtnText}>{"\uD83D\uDCF7 \u518D\u30AD\u30E3\u30EA\u30D6\u30EC\u30FC\u30B7\u30E7\u30F3"}</Text>
+        </TouchableOpacity>
+
         <Text style={styles.sectionTitle}>{"\u2500\u2500 \u30B9\u30AF\u30EA\u30FC\u30F3\u30B7\u30E7\u30C3\u30C8 \u2500\u2500"}</Text>
         <ToggleRow label={"\u81EA\u52D5\u4FDD\u5B58"} value={settings.autoSaveScreenshots} onToggle={() => toggleSetting("autoSaveScreenshots")} />
 
@@ -174,4 +183,18 @@ const toggleStyles = StyleSheet.create({
   barOuter: { width: 80, height: 8, backgroundColor: "#333", borderRadius: 4, overflow: "hidden" },
   barInner: { height: "100%", backgroundColor: "#e94560", borderRadius: 4 },
   volText: { color: "#aaa", fontSize: 12, width: 32, textAlign: "center" },
+});
+
+const calibrationStyles = StyleSheet.create({
+  calibrateBtn: {
+    backgroundColor: "#0f3460",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignSelf: "center",
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#4fc3f7",
+  },
+  calibrateBtnText: { color: "#4fc3f7", fontSize: 14, fontWeight: "bold" },
 });

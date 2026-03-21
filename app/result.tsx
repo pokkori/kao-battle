@@ -145,6 +145,15 @@ export default function ResultScreen() {
 
       <Text style={styles.coinReward}>{"\u7372\u5F97: \uD83E\uDE99 "}{coins.toLocaleString()}</Text>
 
+      {/* Battle flavor text */}
+      <View style={styles.battleFlavorBox}>
+        <Text style={styles.battleFlavorText}>
+          {won
+            ? "\uD83C\uDFA5 \u3053\u306E\u5909\u9854\u3067\u52DD\u5229\u3092\u52DD\u3061\u53D6\u3063\u305F\uFF01"
+            : "\uD83C\uDFA5 \u3053\u306E\u5909\u9854\u3067\u6226\u3063\u305F\u304C\u53CA\u3070\u305A..."}
+        </Text>
+      </View>
+
       {/* Share feedback */}
       {shareText && (
         <View style={styles.shareFeedback}>
@@ -207,7 +216,17 @@ const styles = StyleSheet.create({
   statRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
   statLabel: { color: "#aaa", fontSize: 16 },
   statValue: { color: "#fff", fontSize: 16, fontWeight: "bold" },
-  coinReward: { color: "#ffd700", fontSize: 20, fontWeight: "bold", marginBottom: 16 },
+  coinReward: { color: "#ffd700", fontSize: 20, fontWeight: "bold", marginBottom: 8 },
+  battleFlavorBox: {
+    backgroundColor: "rgba(233,69,96,0.1)",
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "rgba(233,69,96,0.3)",
+  },
+  battleFlavorText: { color: "#e94560", fontSize: 14, fontWeight: "bold", textAlign: "center" },
   shareFeedback: {
     backgroundColor: "rgba(79,195,247,0.2)",
     borderRadius: 8,

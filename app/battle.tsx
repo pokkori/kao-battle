@@ -1,12 +1,14 @@
 import React, { useEffect, useCallback, useRef, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform, Dimensions } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useBattle } from "../hooks/useBattle";
 import { useExpression } from "../hooks/useExpression";
 import { usePlayerData } from "../hooks/useStorage";
 import { getStage } from "../lib/battle/stageManager";
 import { ExpressionType } from "../types/expression";
-import { SkillType } from "../types/battle";
+import { SkillType, SKILLS } from "../types/battle";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const EXPRESSION_EMOJI: Record<ExpressionType, string> = {
   angry: "\uD83D\uDE21", happy: "\uD83D\uDE0A", surprise: "\uD83D\uDE32", sad: "\uD83D\uDE22", neutral: "\uD83D\uDE10",
@@ -24,12 +26,12 @@ const SKILL_NAMES: Record<SkillType, string> = {
   punch: "\u30D1\u30F3\u30C1", barrier: "\u30D0\u30EA\u30A2", beam: "\u30D3\u30FC\u30E0", heal: "\u30D2\u30FC\u30EB", idle: "",
 };
 
-const EXPRESSION_SKILL_LABELS: Record<ExpressionType, { skill: string; icon: string }> = {
-  angry: { skill: "\u30D1\u30F3\u30C1", icon: "\uD83D\uDC4A" },
-  happy: { skill: "\u30D0\u30EA\u30A2", icon: "\uD83D\uDEE1\uFE0F" },
-  surprise: { skill: "\u30D3\u30FC\u30E0", icon: "\u26A1" },
-  sad: { skill: "\u30D2\u30FC\u30EB", icon: "\uD83D\uDCA7" },
-  neutral: { skill: "", icon: "" },
+const SKILL_DAMAGE: Record<SkillType, string> = {
+  punch: "30", barrier: "\u9632\u5FA1", beam: "60", heal: "+15", idle: "",
+};
+
+const EXPRESSION_TO_SKILL: Record<ExpressionType, SkillType> = {
+  angry: "punch", happy: "barrier", surprise: "beam", sad: "heal", neutral: "idle",
 };
 
 // Enemy display emoji based on type
@@ -79,12 +81,35 @@ export default function BattleScreen() {
   const playerHpAnim = useRef(new Animated.Value(100)).current;
   const enemyHpAnim = useRef(new Animated.Value(100)).current;
 
+  // Enemy bounce animation (attack)
+  const enemyBounceAnim = useRef(new Animated.Value(0)).current;
+  // Shockwave animation (player attack)
+  const shockwaveScale = useRef(new Animated.Value(0)).current;
+  const shockwaveOpacity = useRef(new Animated.Value(0)).current;
+  // REC blink animation
+  const recBlink = useRef(new Animated.Value(1)).current;
+  // Camera overlay color animation
+  const cameraOverlayOpacity = useRef(new Animated.Value(0)).current;
+  const [cameraOverlayColor, setCameraOverlayColor] = useState("#4fc3f7");
+
   // Enemy speech bubble
   const [speechBubble, setSpeechBubble] = useState<string | null>(null);
   const speechTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Track last enemy for enter/defeat lines
   const lastEnemyId = useRef<string | null>(null);
+
+  // REC blink loop
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(recBlink, { toValue: 0.2, duration: 500, useNativeDriver: true }),
+        Animated.timing(recBlink, { toValue: 1, duration: 500, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
 
   // Show tutorial on first fight
   useEffect(() => {
@@ -116,18 +141,18 @@ export default function BattleScreen() {
 
   // Animate HP bars
   useEffect(() => {
-    const hpPercent = (state.playerHP / state.playerMaxHP) * 100;
+    const hpPct = (state.playerHP / state.playerMaxHP) * 100;
     Animated.timing(playerHpAnim, {
-      toValue: hpPercent,
+      toValue: hpPct,
       duration: 300,
       useNativeDriver: false,
     }).start();
   }, [state.playerHP]);
 
   useEffect(() => {
-    const enemyHpPercent = state.currentEnemy ? (state.enemyHP / state.currentEnemy.hp) * 100 : 0;
+    const enemyHpPct = state.currentEnemy ? (state.enemyHP / state.currentEnemy.hp) * 100 : 0;
     Animated.timing(enemyHpAnim, {
-      toValue: Math.max(0, enemyHpPercent),
+      toValue: Math.max(0, enemyHpPct),
       duration: 300,
       useNativeDriver: false,
     }).start();
@@ -137,23 +162,25 @@ export default function BattleScreen() {
   useEffect(() => {
     if (lastDamage) {
       if (lastDamage.type === "player_attack") {
-        // Flash blue, show damage popup on enemy
         triggerFlash("#4fc3f7");
         showDamagePopup(`-${lastDamage.amount}${lastDamage.critical ? "!!" : ""}`, lastDamage.critical ? "#ffd700" : "#4fc3f7");
         triggerEnemyShake();
+        triggerShockwave();
+        triggerCameraOverlay("#4fc3f7");
         triggerHaptic("impact");
 
-        // Show defeat line if enemy defeated
         if (lastDamage.enemyDefeated && state.currentEnemy) {
           showSpeechBubble(lastDamage.defeatLine || "...");
         }
       } else if (lastDamage.type === "enemy_attack") {
-        // Flash red
         triggerFlash("#e94560");
         showDamagePopup(`-${lastDamage.amount}`, "#e94560");
+        triggerEnemyBounce();
+        triggerCameraOverlay("#e94560");
         triggerHaptic("warning");
       } else if (lastDamage.type === "heal") {
         showDamagePopup(`+${lastDamage.amount}`, "#4CAF50");
+        triggerCameraOverlay("#4CAF50");
         triggerHaptic("light");
       }
     }
@@ -163,7 +190,6 @@ export default function BattleScreen() {
   useEffect(() => {
     if (battleResult && (state.phase === "win" || state.phase === "lose")) {
       const timeout = setTimeout(() => {
-        // Save data
         update((prev) => ({
           ...prev,
           totalPlays: prev.totalPlays + 1,
@@ -253,6 +279,32 @@ export default function BattleScreen() {
     ]).start();
   };
 
+  const triggerEnemyBounce = () => {
+    Animated.sequence([
+      Animated.timing(enemyBounceAnim, { toValue: 30, duration: 120, useNativeDriver: true }),
+      Animated.timing(enemyBounceAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const triggerShockwave = () => {
+    shockwaveScale.setValue(0.2);
+    shockwaveOpacity.setValue(0.6);
+    Animated.parallel([
+      Animated.timing(shockwaveScale, { toValue: 3, duration: 500, useNativeDriver: true }),
+      Animated.timing(shockwaveOpacity, { toValue: 0, duration: 500, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const triggerCameraOverlay = (color: string) => {
+    setCameraOverlayColor(color);
+    cameraOverlayOpacity.setValue(0.4);
+    Animated.timing(cameraOverlayOpacity, {
+      toValue: 0,
+      duration: 400,
+      useNativeDriver: true,
+    }).start();
+  };
+
   const triggerHaptic = async (type: "impact" | "warning" | "light") => {
     if (Platform.OS === "web") return;
     try {
@@ -305,6 +357,8 @@ export default function BattleScreen() {
     return ENEMY_EMOJIS[enemy.id] || (enemy.isBoss ? "\uD83D\uDC79" : "\uD83D\uDC7E");
   };
 
+  const isFighting = state.phase === "fight" || state.phase === "boss_fight";
+
   return (
     <View style={styles.container}>
       {/* Attack flash overlay */}
@@ -319,22 +373,39 @@ export default function BattleScreen() {
         ]}
       />
 
+      {/* Shockwave effect from bottom on player attack */}
+      {isFighting && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.shockwave,
+            {
+              transform: [{ scale: shockwaveScale }],
+              opacity: shockwaveOpacity,
+            },
+          ]}
+        />
+      )}
+
       {/* HUD */}
       <View style={styles.hud}>
-        <View style={styles.hpBarOuter}>
-          <Animated.View
-            style={[
-              styles.hpBarInner,
-              {
-                width: playerHpAnim.interpolate({
-                  inputRange: [0, 100],
-                  outputRange: ["0%", "100%"],
-                }),
-                backgroundColor: hpPercent > 30 ? "#4CAF50" : "#f44336",
-              },
-            ]}
-          />
-          <Text style={styles.hpText}>{state.playerHP}/{state.playerMaxHP}</Text>
+        <View style={styles.playerHpRow}>
+          <Text style={styles.playerLabel}>YOU</Text>
+          <View style={styles.hpBarOuter}>
+            <Animated.View
+              style={[
+                styles.hpBarInner,
+                {
+                  width: playerHpAnim.interpolate({
+                    inputRange: [0, 100],
+                    outputRange: ["0%", "100%"],
+                  }),
+                  backgroundColor: hpPercent > 30 ? "#4CAF50" : "#f44336",
+                },
+              ]}
+            />
+            <Text style={styles.hpText}>{state.playerHP}/{state.playerMaxHP}</Text>
+          </View>
         </View>
         <View style={styles.hudRow}>
           <Text style={styles.scoreText}>Score: {state.score.toLocaleString()}</Text>
@@ -420,8 +491,8 @@ export default function BattleScreen() {
         </View>
       )}
 
-      {/* Enemy area */}
-      {state.currentEnemy && (state.phase === "fight" || state.phase === "boss_fight") && (
+      {/* Enemy area - enlarged */}
+      {state.currentEnemy && isFighting && (
         <View style={styles.enemyArea}>
           {/* Speech bubble */}
           {speechBubble && (
@@ -445,12 +516,19 @@ export default function BattleScreen() {
             {damagePopText}
           </Animated.Text>
 
-          <Animated.View style={{ transform: [{ translateX: enemyShakeAnim }] }}>
+          <Animated.View style={{
+            transform: [
+              { translateX: enemyShakeAnim },
+              { translateY: enemyBounceAnim },
+            ],
+          }}>
             <Text
               style={[
                 styles.enemyEmoji,
                 {
-                  fontSize: state.currentEnemy.isBoss ? 72 : 48 * state.currentEnemy.scale,
+                  fontSize: state.currentEnemy.isBoss
+                    ? Math.min(120, SCREEN_WIDTH * 0.3)
+                    : Math.min(90, SCREEN_WIDTH * 0.22) * state.currentEnemy.scale,
                 },
               ]}
             >
@@ -476,8 +554,8 @@ export default function BattleScreen() {
                 },
               ]}
             />
+            <Text style={styles.enemyHpValueText}>{Math.max(0, state.enemyHP)}/{state.currentEnemy.hp}</Text>
           </View>
-          <Text style={styles.enemyHpText}>{Math.max(0, state.enemyHP)}/{state.currentEnemy.hp}</Text>
           <View style={styles.weaknessRow}>
             <Text style={styles.weaknessLabel}>{"\u5F31\u70B9:"}</Text>
             <View style={styles.weaknessBadge}>
@@ -495,7 +573,7 @@ export default function BattleScreen() {
       )}
 
       {/* Expression prompt */}
-      {state.requestedExpression && (state.phase === "fight" || state.phase === "boss_fight") && (
+      {state.requestedExpression && isFighting && (
         <View style={styles.promptBox}>
           <Text style={styles.promptText}>
             {`${EXPRESSION_EMOJI[state.requestedExpression]} ${EXPRESSION_LABELS[state.requestedExpression]}\u3063\u3066\uFF01`}
@@ -503,8 +581,8 @@ export default function BattleScreen() {
         </View>
       )}
 
-      {/* Camera preview area */}
-      {(state.phase === "fight" || state.phase === "boss_fight") && (
+      {/* Camera preview area with REC indicator and overlay */}
+      {isFighting && (
         <View style={styles.cameraPreview}>
           <View style={styles.cameraFrame}>
             <Text style={styles.cameraEmoji}>{EXPRESSION_EMOJI[expression.dominant]}</Text>
@@ -514,6 +592,22 @@ export default function BattleScreen() {
               <View style={[styles.cameraCorner, styles.cornerBL]} />
               <View style={[styles.cameraCorner, styles.cornerBR]} />
             </View>
+            {/* Camera color overlay on attack/damage */}
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.cameraColorOverlay,
+                {
+                  backgroundColor: cameraOverlayColor,
+                  opacity: cameraOverlayOpacity,
+                },
+              ]}
+            />
+            {/* REC indicator */}
+            <Animated.View style={[styles.recBadge, { opacity: recBlink }]}>
+              <View style={styles.recDot} />
+              <Text style={styles.recText}>REC</Text>
+            </Animated.View>
           </View>
           <Text style={styles.cameraLabel}>
             {`${EXPRESSION_EMOJI[expression.dominant]} ${EXPRESSION_LABELS[expression.dominant]} ${Math.round(expression.scores[expression.dominant] * 100)}%`}
@@ -524,54 +618,51 @@ export default function BattleScreen() {
         </View>
       )}
 
-      {/* Expression control buttons (improved with labels) */}
-      {(state.phase === "fight" || state.phase === "boss_fight") && (
-        <View style={styles.expressionBtnRow}>
+      {/* Expression control cards - 2x2 grid with damage values and cooldown */}
+      {isFighting && (
+        <View style={styles.cardGrid}>
           {expressionButtons.map((expr) => {
             const isActive = expression.dominant === expr;
             const isWeakness = state.currentEnemy?.weakness === expr;
+            const skill = EXPRESSION_TO_SKILL[expr];
+            const cd = state.cooldowns[skill];
+            const maxCd = SKILLS[skill].cooldown;
+            const ready = cd === 0;
+            const cdPercent = maxCd > 0 ? (cd / maxCd) * 100 : 0;
             return (
               <TouchableOpacity
                 key={expr}
                 style={[
-                  styles.expressionBtn,
-                  isActive && styles.expressionBtnActive,
-                  isWeakness && styles.expressionBtnWeakness,
+                  styles.skillCard,
+                  isActive && styles.skillCardActive,
+                  isWeakness && styles.skillCardWeakness,
+                  !ready && styles.skillCardCooldown,
                 ]}
                 onPress={() => forceExpression(expr)}
+                activeOpacity={0.7}
               >
-                <Text style={styles.expressionBtnEmoji}>
-                  {EXPRESSION_EMOJI[expr]}
+                <Text style={styles.skillCardEmoji}>{EXPRESSION_EMOJI[expr]}</Text>
+                <Text style={styles.skillCardName}>
+                  {SKILL_ICONS[skill]} {SKILL_NAMES[skill]}
                 </Text>
-                <Text style={[styles.expressionBtnLabel, isActive && styles.expressionBtnLabelActive]}>
-                  {EXPRESSION_SKILL_LABELS[expr].icon} {EXPRESSION_SKILL_LABELS[expr].skill}
+                <Text style={[
+                  styles.skillCardDamage,
+                  skill === "heal" && { color: "#4CAF50" },
+                  skill === "barrier" && { color: "#4fc3f7" },
+                ]}>
+                  {SKILL_DAMAGE[skill]}
                 </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
-
-      {/* Skill cooldown bars */}
-      {(state.phase === "fight" || state.phase === "boss_fight") && (
-        <View style={styles.skillBar}>
-          {(["punch", "barrier", "beam", "heal"] as SkillType[]).map((skill) => {
-            const maxCd = skill === "punch" ? 800 : skill === "barrier" ? 1500 : skill === "beam" ? 2000 : 3000;
-            const cd = state.cooldowns[skill];
-            const ready = cd === 0;
-            return (
-              <View key={skill} style={styles.skillSlot}>
-                <Text style={[styles.skillIcon, !ready && styles.skillOnCd]}>
-                  {SKILL_ICONS[skill]}
-                </Text>
-                {!ready && (
-                  <View style={styles.cdBarOuter}>
-                    <View style={[styles.cdBarInner, { width: `${(cd / maxCd) * 100}%` }]} />
+                {isWeakness && (
+                  <View style={styles.weaknessTag}>
+                    <Text style={styles.weaknessTagText}>x2</Text>
                   </View>
                 )}
-                {ready && <View style={styles.readyDot} />}
-                <Text style={styles.skillName}>{SKILL_NAMES[skill]}</Text>
-              </View>
+                {!ready && (
+                  <View style={styles.cardCdOverlay}>
+                    <View style={[styles.cardCdBar, { height: `${cdPercent}%` }]} />
+                  </View>
+                )}
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -586,10 +677,24 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 20,
   },
+  shockwave: {
+    position: "absolute",
+    bottom: 60,
+    alignSelf: "center",
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: "#4fc3f7",
+    backgroundColor: "rgba(79,195,247,0.15)",
+    zIndex: 5,
+  },
   hud: { paddingTop: 50, paddingHorizontal: 16 },
-  hpBarOuter: { height: 20, backgroundColor: "#333", borderRadius: 10, overflow: "hidden", position: "relative" },
+  playerHpRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  playerLabel: { color: "#4CAF50", fontSize: 12, fontWeight: "bold", width: 30 },
+  hpBarOuter: { flex: 1, height: 22, backgroundColor: "#333", borderRadius: 11, overflow: "hidden", position: "relative", borderWidth: 1, borderColor: "#555" },
   hpBarInner: { height: "100%", borderRadius: 10 },
-  hpText: { position: "absolute", left: 0, right: 0, textAlign: "center", color: "#fff", fontSize: 12, fontWeight: "bold", lineHeight: 20 },
+  hpText: { position: "absolute", left: 0, right: 0, textAlign: "center", color: "#fff", fontSize: 13, fontWeight: "bold", lineHeight: 22 },
   hudRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6 },
   scoreText: { color: "#ffd700", fontSize: 16, fontWeight: "bold" },
   comboText: { color: "#e94560", fontSize: 16, fontWeight: "bold" },
@@ -624,13 +729,13 @@ const styles = StyleSheet.create({
   quitBtnText: { color: "#fff", fontSize: 14 },
   winText: { color: "#ffd700", fontSize: 36, fontWeight: "bold" },
   loseText: { color: "#f44336", fontSize: 36, fontWeight: "bold" },
-  enemyArea: { alignItems: "center", marginTop: 12 },
+  enemyArea: { alignItems: "center", marginTop: 8 },
   enemyEmoji: { textAlign: "center" },
-  enemyName: { color: "#fff", fontSize: 20, fontWeight: "bold", marginTop: 4 },
-  bossName: { color: "#ffd700", fontSize: 22, textShadowColor: "#ffd700", textShadowRadius: 8 },
-  enemyHpBarOuter: { width: 200, height: 14, backgroundColor: "#333", borderRadius: 7, marginTop: 6, overflow: "hidden", borderWidth: 1, borderColor: "#555" },
-  enemyHpBarInner: { height: "100%", borderRadius: 6 },
-  enemyHpText: { color: "#aaa", fontSize: 12, marginTop: 2 },
+  enemyName: { color: "#fff", fontSize: 22, fontWeight: "bold", marginTop: 4 },
+  bossName: { color: "#ffd700", fontSize: 24, textShadowColor: "#ffd700", textShadowRadius: 10 },
+  enemyHpBarOuter: { width: 240, height: 18, backgroundColor: "#333", borderRadius: 9, marginTop: 6, overflow: "hidden", borderWidth: 1, borderColor: "#555", position: "relative" },
+  enemyHpBarInner: { height: "100%", borderRadius: 8 },
+  enemyHpValueText: { position: "absolute", left: 0, right: 0, textAlign: "center", color: "#fff", fontSize: 12, fontWeight: "bold", lineHeight: 18 },
   weaknessRow: { flexDirection: "row", alignItems: "center", marginTop: 4, gap: 6 },
   weaknessLabel: { color: "#aaa", fontSize: 13 },
   weaknessBadge: {
@@ -679,11 +784,11 @@ const styles = StyleSheet.create({
   damagePopup: {
     position: "absolute",
     top: -20,
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: "bold",
     zIndex: 5,
-    textShadowColor: "rgba(0,0,0,0.5)",
-    textShadowRadius: 4,
+    textShadowColor: "rgba(0,0,0,0.7)",
+    textShadowRadius: 6,
   },
   promptBox: {
     alignSelf: "center",
@@ -691,53 +796,81 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#e94560",
     borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    marginTop: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    marginTop: 6,
   },
-  promptText: { color: "#fff", fontSize: 22, fontWeight: "bold" },
+  promptText: { color: "#fff", fontSize: 20, fontWeight: "bold" },
+  // Camera preview with REC
   cameraPreview: {
     alignSelf: "center",
     backgroundColor: "#16213e",
     borderRadius: 12,
-    padding: 12,
-    marginTop: 10,
+    padding: 10,
+    marginTop: 8,
     alignItems: "center",
     borderWidth: 1,
     borderColor: "#0f3460",
     minWidth: 200,
   },
   cameraFrame: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     backgroundColor: "#0f3460",
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
     overflow: "hidden",
   },
-  cameraEmoji: { fontSize: 42 },
+  cameraEmoji: { fontSize: 44 },
   cameraOverlayCorners: {
     ...StyleSheet.absoluteFillObject,
   },
   cameraCorner: {
     position: "absolute",
-    width: 12,
-    height: 12,
+    width: 14,
+    height: 14,
     borderColor: "#4fc3f7",
   },
   cornerTL: { top: 4, left: 4, borderTopWidth: 2, borderLeftWidth: 2 },
   cornerTR: { top: 4, right: 4, borderTopWidth: 2, borderRightWidth: 2 },
   cornerBL: { bottom: 4, left: 4, borderBottomWidth: 2, borderLeftWidth: 2 },
   cornerBR: { bottom: 4, right: 4, borderBottomWidth: 2, borderRightWidth: 2 },
-  cameraLabel: { color: "#aaa", fontSize: 13, marginTop: 6 },
+  cameraColorOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 44,
+  },
+  recBadge: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  recDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#f44336",
+  },
+  recText: {
+    color: "#f44336",
+    fontSize: 8,
+    fontWeight: "bold",
+  },
+  cameraLabel: { color: "#aaa", fontSize: 13, marginTop: 4 },
   detectionBar: {
-    width: 140,
+    width: 160,
     height: 4,
     backgroundColor: "#333",
     borderRadius: 2,
-    marginTop: 4,
+    marginTop: 3,
     overflow: "hidden",
   },
   detectionFill: {
@@ -745,49 +878,91 @@ const styles = StyleSheet.create({
     backgroundColor: "#4fc3f7",
     borderRadius: 2,
   },
-  expressionBtnRow: {
+  // 2x2 skill card grid
+  cardGrid: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "center",
     gap: 8,
-    marginTop: 10,
-    paddingHorizontal: 12,
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 30,
   },
-  expressionBtn: {
-    flex: 1,
-    maxWidth: 90,
-    paddingVertical: 8,
-    borderRadius: 12,
+  skillCard: {
+    width: (SCREEN_WIDTH - 48) / 2,
+    maxWidth: 170,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 16,
     backgroundColor: "#16213e",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
-    borderColor: "#333",
+    borderColor: "#2a2a4e",
+    position: "relative",
+    overflow: "hidden",
   },
-  expressionBtnActive: { borderColor: "#e94560", backgroundColor: "#2a1a3e" },
-  expressionBtnWeakness: { borderColor: "#4fc3f7" },
-  expressionBtnEmoji: { fontSize: 28 },
-  expressionBtnLabel: { color: "#888", fontSize: 10, marginTop: 2, fontWeight: "bold" },
-  expressionBtnLabelActive: { color: "#e94560" },
-  skillBar: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 16,
-    marginTop: 10,
-    paddingBottom: 30,
+  skillCardActive: {
+    borderColor: "#e94560",
+    backgroundColor: "#2a1a3e",
+    shadowColor: "#e94560",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  skillSlot: { alignItems: "center", width: 60 },
-  skillIcon: { fontSize: 28 },
-  skillOnCd: { opacity: 0.3 },
-  cdBarOuter: { width: 50, height: 4, backgroundColor: "#333", borderRadius: 2, marginTop: 2 },
-  cdBarInner: { height: "100%", backgroundColor: "#e94560", borderRadius: 2 },
-  readyDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#4CAF50",
+  skillCardWeakness: {
+    borderColor: "#4fc3f7",
+    borderWidth: 3,
+    shadowColor: "#4fc3f7",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  skillCardCooldown: {
+    opacity: 0.6,
+  },
+  skillCardEmoji: {
+    fontSize: 36,
+  },
+  skillCardName: {
+    color: "#ccc",
+    fontSize: 14,
+    fontWeight: "bold",
     marginTop: 2,
   },
-  skillName: { color: "#aaa", fontSize: 10, marginTop: 2 },
+  skillCardDamage: {
+    color: "#e94560",
+    fontSize: 16,
+    fontWeight: "bold",
+    marginTop: 1,
+  },
+  weaknessTag: {
+    position: "absolute",
+    top: 4,
+    right: 6,
+    backgroundColor: "#4fc3f7",
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  weaknessTagText: {
+    color: "#000",
+    fontSize: 11,
+    fontWeight: "bold",
+  },
+  cardCdOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+    borderRadius: 14,
+  },
+  cardCdBar: {
+    backgroundColor: "rgba(233,69,96,0.3)",
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
+  },
   // Tutorial styles
   tutorialOverlay: {
     ...StyleSheet.absoluteFillObject,
