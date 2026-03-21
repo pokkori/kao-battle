@@ -56,12 +56,13 @@ export interface BattleResult {
 }
 
 export interface DamageEvent {
-  type: "player_attack" | "enemy_attack" | "heal";
+  type: "player_attack" | "enemy_attack" | "heal" | "barrier";
   amount: number;
   critical?: boolean;
   timestamp: number;
   enemyDefeated?: boolean;
   defeatLine?: string;
+  skill?: SkillType;
 }
 
 export function useBattle(stage: StageData | null, equippedPunch: string, equippedBeam: string) {
@@ -268,10 +269,11 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
       if (skill === "barrier") {
         next.barrierActive = true;
         next.barrierRemaining = 2000;
+        setLastDamage({ type: "barrier", amount: 0, timestamp: Date.now(), skill: "barrier" });
       } else if (skill === "heal") {
         const healAmount = skillData.basePower;
         next.playerHP = Math.min(next.playerMaxHP, next.playerHP + healAmount);
-        setLastDamage({ type: "heal", amount: healAmount, timestamp: Date.now() });
+        setLastDamage({ type: "heal", amount: healAmount, timestamp: Date.now(), skill: "heal" });
       } else if (skill === "punch" || skill === "beam") {
         const effect = skill === "punch" ? equippedPunch : equippedBeam;
         const dmgResult = calculatePlayerDamage(
@@ -294,6 +296,7 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
           timestamp: Date.now(),
           enemyDefeated,
           defeatLine: enemyDefeated ? next.currentEnemy?.defeatLine : undefined,
+          skill,
         });
 
         if (enemyDefeated) {

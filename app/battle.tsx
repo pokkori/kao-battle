@@ -7,6 +7,8 @@ import { usePlayerData } from "../hooks/useStorage";
 import { getStage } from "../lib/battle/stageManager";
 import { ExpressionType } from "../types/expression";
 import { SkillType, SKILLS } from "../types/battle";
+import { useBattleSE } from "../hooks/useBattleSE";
+import { useWebCamera } from "../hooks/useWebCamera";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -65,6 +67,15 @@ export default function BattleScreen() {
   const { state, battleResult, lastDamage, actions } = useBattle(stage, player.equippedPunchEffect, player.equippedBeamEffect);
   const { expression, forceExpression } = useExpression(
     state.phase === "fight" || state.phase === "boss_fight"
+  );
+
+  // Battle SE (Web Audio API - web only)
+  const { playSE } = useBattleSE();
+
+  // Web camera preview (web only)
+  const isFightPhase = state.phase === "fight" || state.phase === "boss_fight";
+  const { videoRef: setVideoRef, cameraReady, cameraError, captureFrame } = useWebCamera(
+    Platform.OS === "web" && isFightPhase
   );
 
   // Tutorial state
@@ -169,8 +180,21 @@ export default function BattleScreen() {
         triggerCameraOverlay("#4fc3f7");
         triggerHaptic("impact");
 
+        // Play attack SE based on skill type
+        if (lastDamage.skill === "beam") {
+          playSE("beam");
+        } else {
+          playSE("punch");
+        }
+
+        // Combo SE
+        if (lastDamage.critical) {
+          playSE("combo");
+        }
+
         if (lastDamage.enemyDefeated && state.currentEnemy) {
           showSpeechBubble(lastDamage.defeatLine || "...");
+          playSE("enemyDefeat");
         }
       } else if (lastDamage.type === "enemy_attack") {
         triggerFlash("#e94560");
@@ -178,13 +202,27 @@ export default function BattleScreen() {
         triggerEnemyBounce();
         triggerCameraOverlay("#e94560");
         triggerHaptic("warning");
+        playSE("enemyAttack");
       } else if (lastDamage.type === "heal") {
         showDamagePopup(`+${lastDamage.amount}`, "#4CAF50");
         triggerCameraOverlay("#4CAF50");
         triggerHaptic("light");
+        playSE("heal");
+      } else if (lastDamage.type === "barrier") {
+        triggerCameraOverlay("#4fc3f7");
+        playSE("barrier");
       }
     }
   }, [lastDamage]);
+
+  // Play win/lose SE
+  useEffect(() => {
+    if (state.phase === "win") {
+      playSE("win");
+    } else if (state.phase === "lose") {
+      playSE("gameOver");
+    }
+  }, [state.phase]);
 
   // Navigate to result when battle ends
   useEffect(() => {
@@ -357,7 +395,7 @@ export default function BattleScreen() {
     return ENEMY_EMOJIS[enemy.id] || (enemy.isBoss ? "\uD83D\uDC79" : "\uD83D\uDC7E");
   };
 
-  const isFighting = state.phase === "fight" || state.phase === "boss_fight";
+  const isFighting = isFightPhase;
 
   return (
     <View style={styles.container}>
@@ -582,10 +620,28 @@ export default function BattleScreen() {
       )}
 
       {/* Camera preview area with REC indicator and overlay */}
-      {isFighting && (
+      {isFightPhase && (
         <View style={styles.cameraPreview}>
           <View style={styles.cameraFrame}>
-            <Text style={styles.cameraEmoji}>{EXPRESSION_EMOJI[expression.dominant]}</Text>
+            {/* Web camera feed */}
+            {Platform.OS === "web" && (
+              <video
+                ref={setVideoRef as any}
+                autoPlay
+                playsInline
+                muted
+                style={{
+                  position: "absolute",
+                  width: 88,
+                  height: 88,
+                  borderRadius: 44,
+                  objectFit: "cover",
+                  transform: "scaleX(-1)",
+                  zIndex: 0,
+                } as any}
+              />
+            )}
+            <Text style={[styles.cameraEmoji, Platform.OS === "web" && cameraReady && { opacity: 0.6, zIndex: 1 } as any]}>{EXPRESSION_EMOJI[expression.dominant]}</Text>
             <View style={styles.cameraOverlayCorners}>
               <View style={[styles.cameraCorner, styles.cornerTL]} />
               <View style={[styles.cameraCorner, styles.cornerTR]} />
