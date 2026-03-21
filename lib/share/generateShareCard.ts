@@ -9,8 +9,9 @@ export async function generateShareCard(options: {
   rank: string;
   score: number;
   maxCombo: number;
+  loginStreak?: number;    // ← 追加
 }): Promise<string> {
-  const { faceImageDataUrl, stageName, rank, score, maxCombo } = options;
+  const { faceImageDataUrl, stageName, rank, score, maxCombo, loginStreak } = options;
 
   const W = 1200;
   const H = 630;
@@ -110,11 +111,23 @@ export async function generateShareCard(options: {
   ctx.font = "bold 28px sans-serif";
   ctx.fillText(`MAX COMBO: x${maxCombo}`, rightX, 445);
 
+  // Streak badge
+  if (loginStreak && loginStreak >= 2) {
+    ctx.fillStyle = "rgba(255,107,53,0.85)";
+    ctx.beginPath();
+    ctx.roundRect(W - 340, H - 110, 300, 55, 8);
+    ctx.fill();
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "bold 26px sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(`\uD83D\uDD25 ${loginStreak}\u65E5\u9023\u7D9A!`, W - 55, H - 74);
+  }
+
   // Bottom hashtags
   ctx.fillStyle = "#4fc3f7";
   ctx.font = "22px sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("#\u9854\u30D0\u30C8\u30EB #FaceFight", W / 2, H - 60);
+  ctx.fillText("#\u9854\u30D0\u30C8\u30EB #FaceFight #\u8868\u60C5\u30B2\u30FC\u30E0", W / 2, H - 60);
 
   // Footer CTA
   ctx.fillStyle = "#aaa";

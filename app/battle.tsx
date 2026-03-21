@@ -503,6 +503,7 @@ export default function BattleScreen() {
 
   const hpPercent = (state.playerHP / state.playerMaxHP) * 100;
   const enemyHpPercent = state.currentEnemy ? (state.enemyHP / state.currentEnemy.hp) * 100 : 0;
+  const enemyHpRatio = state.currentEnemy ? state.enemyHP / (state.currentEnemy.hp ?? 1) : 1;
 
   const expressionButtons: ExpressionType[] = ["angry", "happy", "surprise", "sad"];
 
@@ -510,6 +511,12 @@ export default function BattleScreen() {
     if (percent > 60) return "#4CAF50";
     if (percent > 30) return "#FFC107";
     return "#f44336";
+  };
+
+  const getEnemyHpColor = () => {
+    if (enemyHpRatio > 0.5) return "#4CAF50";
+    if (enemyHpRatio > 0.25) return "#FF9800";
+    return "#FF1744";
   };
 
   // Tutorial content
@@ -787,12 +794,15 @@ export default function BattleScreen() {
                     inputRange: [0, 100],
                     outputRange: ["0%", "100%"],
                   }),
-                  backgroundColor: getHpColor(enemyHpPercent),
+                  backgroundColor: getEnemyHpColor(),
                 },
               ]}
             />
             <Text style={styles.enemyHpValueText}>{Math.max(0, state.enemyHP)}/{state.currentEnemy.hp}</Text>
           </View>
+          {enemyHpRatio <= 0.5 && (
+            <Text style={styles.enragedBadge}>{"\uD83D\uDE21 \u6FC3\u6012\uFF01"}</Text>
+          )}
           <View style={styles.weaknessRow}>
             <Text style={styles.weaknessLabel}>{"\u5F31\u70B9:"}</Text>
             <View style={styles.weaknessBadge}>
@@ -1071,6 +1081,7 @@ const styles = StyleSheet.create({
   enemyHpBarOuter: { width: 240, height: 18, backgroundColor: "#333", borderRadius: 9, marginTop: 6, overflow: "hidden", borderWidth: 1, borderColor: "#555", position: "relative" },
   enemyHpBarInner: { height: "100%", borderRadius: 8 },
   enemyHpValueText: { position: "absolute", left: 0, right: 0, textAlign: "center", color: "#fff", fontSize: 12, fontWeight: "bold", lineHeight: 18 },
+  enragedBadge: { color: "#FF1744", fontWeight: "bold", fontSize: 14, textAlign: "center", marginTop: 2 },
   weaknessRow: { flexDirection: "row", alignItems: "center", marginTop: 4, gap: 6 },
   weaknessLabel: { color: "#aaa", fontSize: 13 },
   weaknessBadge: {

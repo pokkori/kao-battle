@@ -112,6 +112,7 @@ export default function ResultScreen() {
         rank,
         score,
         maxCombo,
+        loginStreak,    // ← 追加（既存state変数を渡す）
       }).then((url) => {
         setShareCardUrl(url);
       }).catch(() => {
@@ -166,10 +167,10 @@ export default function ResultScreen() {
 
   const handleShare = async () => {
     const stageName = stage?.name ?? stageId;
-    const streakPrefix = loginStreak >= 3 ? `\uD83D\uDD25${loginStreak}\u65E5\u9023\u7D9A! ` : "";
+    const streakText = loginStreak >= 2 ? ` ${loginStreak}\u65E5\u9023\u7D9A\uD83D\uDD25` : "";
     const dailyPrefix = dailyMode ? "\uD83D\uDCC5 \u30C7\u30A4\u30EA\u30FC\u6311\u6226 " : "";
     const dailyTags = dailyMode ? " #\u9854\u30D0\u30C8\u30EB\u30C7\u30A4\u30EA\u30FC #FaceFightDaily" : "";
-    const text = `${streakPrefix}${dailyPrefix}\u9854\u30D0\u30C8\u30EB ${stageName} ${won ? "\u30AF\u30EA\u30A2\uFF01" : "\u6311\u6226\u4E2D..."}\n${RANK_EMOJIS[rank]} \u30E9\u30F3\u30AF${rank} \uD83D\uDC4A\u30B9\u30B3\u30A2${score.toLocaleString()}\n\u30B3\u30F3\u30DC x${maxCombo} | \u6483\u7834 ${defeated}/${total}\n#\u9854\u30D0\u30C8\u30EB #FaceFight${dailyTags}`;
+    const text = `${dailyPrefix}\u9854\u30D0\u30C8\u30EB ${stageName}${streakText} ${won ? "\u30AF\u30EA\u30A2\uFF01" : "\u6311\u6226\u4E2D..."}\n${RANK_EMOJIS[rank]} \u30E9\u30F3\u30AF${rank} \uD83D\uDC4A\u30B9\u30B3\u30A2${score.toLocaleString()} \u30B3\u30F3\u30DC x${maxCombo}\n#\u9854\u30D0\u30C8\u30EB #FaceFight #\u8868\u60C5\u30B2\u30FC\u30E0${dailyTags}`;
 
     if (Platform.OS === "web") {
       // Try Web Share API with share card image

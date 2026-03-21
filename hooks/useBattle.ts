@@ -76,6 +76,7 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
   const lastSkillTimeRef = useRef(0);
   const gameLoopRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chargeTimerRef = useRef<Record<SkillType, number>>({ punch: 0, barrier: 0, beam: 0, heal: 0, idle: 0 });
+  const turnCountRef = useRef(0);
 
   const stopLoop = useCallback(() => {
     if (gameLoopRef.current) {
@@ -181,7 +182,9 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
         if (next.currentEnemy) {
           next.enemyAttackTimer -= dt;
           if (next.enemyAttackTimer <= 0) {
-            const attack = pickAttack(next.currentEnemy);
+            const enemyHpRatio = next.enemyHP / (next.currentEnemy?.hp ?? 100);
+            turnCountRef.current += 1;
+            const attack = pickAttack(next.currentEnemy, enemyHpRatio, turnCountRef.current);
             const dmg = calculateEnemyDamage(attack, next.barrierActive, SKILLS.barrier.basePower);
 
             if (attack.type === "heal" && attack.healAmount) {
@@ -313,6 +316,7 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
             const inst = makeEnemyInstance(nextEnemy);
             if (inst.isBoss) {
               next.phase = "boss_warning";
+              turnCountRef.current = 0;
               setTimeout(() => {
                 setState((p) => ({
                   ...p,
@@ -325,6 +329,7 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
               next.currentEnemy = null;
               next.enemyHP = 0;
             } else {
+              turnCountRef.current = 0;
               next.currentEnemy = inst;
               next.enemyHP = inst.hp;
               next.enemyAttackTimer = pickAttack(inst).interval;
