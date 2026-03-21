@@ -1,12 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { usePlayerData } from "../hooks/useStorage";
 import { ALL_SHOP_ITEMS } from "../lib/data/shopItems";
 import { ShopCategory } from "../types/shop";
 
-const CATEGORIES: { key: ShopCategory | "all"; label: string }[] = [
+const CATEGORIES: { key: ShopCategory | "all" | "coin_pack"; label: string }[] = [
   { key: "all", label: "\u5168\u3066" },
+  { key: "coin_pack", label: "\uD83E\uDE99 \u30B3\u30A4\u30F3" },
   { key: "punch_effect", label: "\u30D1\u30F3\u30C1" },
   { key: "barrier_skin", label: "\u30D0\u30EA\u30A2" },
   { key: "beam_effect", label: "\u30D3\u30FC\u30E0" },
@@ -17,13 +18,27 @@ const RARITY_COLORS: Record<string, string> = {
   common: "#9e9e9e", rare: "#2196F3", epic: "#9C27B0", legendary: "#ffd700",
 };
 
+const COIN_PACKS = [
+  { id: "coin_300", label: "300\u30B3\u30A4\u30F3", coins: 300, price: "\u00A5300" },
+  { id: "coin_1000", label: "1000\u30B3\u30A4\u30F3", coins: 1000, price: "\u00A5800" },
+];
+
 export default function ShopScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ tab?: string }>();
   const { player, update, loaded } = usePlayerData();
-  const [selectedCategory, setSelectedCategory] = useState<ShopCategory | "all">("all");
+  const [selectedCategory, setSelectedCategory] = useState<ShopCategory | "all" | "coin_pack">("all");
+
+  useEffect(() => {
+    if (params.tab === "coin_pack") {
+      setSelectedCategory("coin_pack");
+    }
+  }, [params.tab]);
 
   const items = selectedCategory === "all"
     ? ALL_SHOP_ITEMS
+    : selectedCategory === "coin_pack"
+    ? []
     : ALL_SHOP_ITEMS.filter((i) => i.category === selectedCategory);
 
   const purchase = (itemId: string) => {
@@ -42,7 +57,7 @@ export default function ShopScreen() {
       return;
     }
     if (item.currency === "iap") {
-      Alert.alert("\u8AB2\u91D1", "\u8AB2\u91D1\u6A5F\u80FD\u306F\u73FE\u5728\u5229\u7528\u3067\u304D\u307E\u305B\u3093\u3002");
+      router.push({ pathname: "/shop", params: { tab: "coin_pack" } } as any);
       return;
     }
     if (item.price > 0 && player.coins < item.price) {
@@ -88,7 +103,30 @@ export default function ShopScreen() {
       </ScrollView>
 
       <ScrollView contentContainerStyle={styles.itemList}>
-        {items.map((item) => {
+        {selectedCategory === "coin_pack" && (
+          <>
+            {COIN_PACKS.map((pack) => (
+              <View key={pack.id} style={styles.coinPackCard}>
+                <View style={styles.itemInfo}>
+                  <Text style={styles.coinPackName}>{"\uD83E\uDE99 "}{pack.label}</Text>
+                  <Text style={styles.itemDesc}>{pack.price}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.buyBtn}
+                  onPress={() =>
+                    Alert.alert(
+                      "\u6E96\u5099\u4E2D",
+                      "\u3053\u306E\u6A5F\u80FD\u306F\u6E96\u5099\u4E2D\u3067\u3059\u3002\u30D0\u30C8\u30EB\u30AF\u30EA\u30A2\u3067\u30B3\u30A4\u30F3\u3092\u7372\u5F97\u3067\u304D\u307E\u3059\uFF01"
+                    )
+                  }
+                >
+                  <Text style={styles.buyBtnText}>{pack.price}</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </>
+        )}
+        {selectedCategory !== "coin_pack" && items.map((item) => {
           const owned = isOwned(item.id);
           const equipped = isEquipped(item.id);
           return (
@@ -155,4 +193,9 @@ const styles = StyleSheet.create({
   equipBtn: { backgroundColor: "#4CAF50", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
   equipBtnText: { color: "#fff", fontWeight: "bold", fontSize: 14 },
   equippedLabel: { color: "#4CAF50", fontWeight: "bold", fontSize: 14 },
+  coinPackCard: {
+    flexDirection: "row", backgroundColor: "#16213e", borderRadius: 12,
+    borderWidth: 2, borderColor: "#ffd700", padding: 16, alignItems: "center",
+  },
+  coinPackName: { fontSize: 18, fontWeight: "bold", color: "#ffd700" },
 });

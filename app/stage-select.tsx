@@ -27,7 +27,9 @@ export default function StageSelectScreen() {
           <Text style={styles.backBtn}>{"\u2190 \u623B\u308B"}</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{"\u30B9\u30C6\u30FC\u30B8\u9078\u629E"}</Text>
-        <View style={{ width: 60 }} />
+        <TouchableOpacity onPress={() => router.push("/achievements" as any)}>
+          <Text style={styles.rankingBtn}>{"\uD83C\uDFC6 \u8A18\u9332"}</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -88,6 +90,7 @@ const styles = StyleSheet.create({
   },
   backBtn: { color: "#e94560", fontSize: 16, fontWeight: "bold" },
   headerTitle: { color: "#fff", fontSize: 20, fontWeight: "bold" },
+  rankingBtn: { color: "#ffd700", fontSize: 14, fontWeight: "bold" },
   scroll: { paddingBottom: 40, paddingHorizontal: 16 },
   worldSection: { marginBottom: 24 },
   worldTitle: { fontSize: 18, fontWeight: "bold", textAlign: "center", marginBottom: 12 },

@@ -69,8 +69,9 @@ const SKILL_RING_COLORS: Record<SkillType, string> = {
 
 export default function BattleScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ stageId: string }>();
+  const params = useLocalSearchParams<{ stageId: string; dailyMode?: string }>();
   const stageId = params.stageId ?? "stage_1_1";
+  const dailyMode = params.dailyMode ?? "0";
   const stage = getStage(stageId) ?? null;
   const { player, update } = usePlayerData();
   const { state, battleResult, lastDamage, actions } = useBattle(stage, player.equippedPunchEffect, player.equippedBeamEffect);
@@ -349,6 +350,7 @@ export default function BattleScreen() {
             elapsed: String(battleResult.elapsedTime),
             rank: battleResult.rank,
             coins: String(battleResult.coins),
+            dailyMode,
           },
         });
       }, 1500);

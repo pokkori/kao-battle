@@ -4,6 +4,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { getStage, getNextStageId } from "../lib/battle/stageManager";
 import { RankGrade } from "../types/player";
 import { generateShareCard } from "../lib/share/generateShareCard";
+import { useRanking } from "../hooks/useRanking";
 
 const RANK_COLORS: Record<RankGrade, string> = {
   S: "#ffd700", A: "#4CAF50", B: "#2196F3", C: "#9e9e9e", D: "#795548",
@@ -18,6 +19,7 @@ export default function ResultScreen() {
   const params = useLocalSearchParams<{
     stageId: string; won: string; score: string; maxCombo: string;
     defeated: string; total: string; elapsed: string; rank: string; coins: string;
+    dailyMode: string;
   }>();
 
   const stageId = params.stageId ?? "stage_1_1";
@@ -29,10 +31,12 @@ export default function ResultScreen() {
   const elapsed = parseInt(params.elapsed ?? "0", 10);
   const rank = (params.rank as RankGrade) ?? "D";
   const coins = parseInt(params.coins ?? "0", 10);
+  const dailyMode = params.dailyMode === "1";
 
   const stage = getStage(stageId);
   const nextStageId = getNextStageId(stageId);
 
+  const { updateRanking } = useRanking();
   const [displayScore, setDisplayScore] = useState(0);
   const [shareText, setShareText] = useState<string | null>(null);
   const [capturedFace, setCapturedFace] = useState<string | null>(null);
@@ -44,6 +48,14 @@ export default function ResultScreen() {
     new Animated.Value(0),
     new Animated.Value(0),
   ]).current;
+
+  // Save to local ranking on clear
+  useEffect(() => {
+    if (won) {
+      const today = new Date().toISOString().split("T")[0];
+      updateRanking(stageId, score, rank, today);
+    }
+  }, []);
 
   // Load captured face from sessionStorage (web only)
   useEffect(() => {
@@ -121,7 +133,9 @@ export default function ResultScreen() {
 
   const handleShare = async () => {
     const stageName = stage?.name ?? stageId;
-    const text = `\u9854\u30D0\u30C8\u30EB ${stageName} ${won ? "\u30AF\u30EA\u30A2\uFF01" : "\u6311\u6226\u4E2D..."}\n${RANK_EMOJIS[rank]} \u30E9\u30F3\u30AF${rank} \uD83D\uDC4A\u30B9\u30B3\u30A2${score.toLocaleString()}\n\u30B3\u30F3\u30DC x${maxCombo} | \u6483\u7834 ${defeated}/${total}\n#\u9854\u30D0\u30C8\u30EB #FaceFight`;
+    const dailyPrefix = dailyMode ? "\uD83D\uDCC5 \u30C7\u30A4\u30EA\u30FC\u6311\u6226 " : "";
+    const dailyTags = dailyMode ? " #\u9854\u30D0\u30C8\u30EB\u30C7\u30A4\u30EA\u30FC #FaceFightDaily" : "";
+    const text = `${dailyPrefix}\u9854\u30D0\u30C8\u30EB ${stageName} ${won ? "\u30AF\u30EA\u30A2\uFF01" : "\u6311\u6226\u4E2D..."}\n${RANK_EMOJIS[rank]} \u30E9\u30F3\u30AF${rank} \uD83D\uDC4A\u30B9\u30B3\u30A2${score.toLocaleString()}\n\u30B3\u30F3\u30DC x${maxCombo} | \u6483\u7834 ${defeated}/${total}\n#\u9854\u30D0\u30C8\u30EB #FaceFight${dailyTags}`;
 
     if (Platform.OS === "web") {
       // Try Web Share API with share card image

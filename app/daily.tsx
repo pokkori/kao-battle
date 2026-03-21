@@ -74,7 +74,7 @@ export default function DailyScreen() {
 
         <TouchableOpacity
           style={styles.startBtn}
-          onPress={() => router.push({ pathname: "/battle", params: { stageId: "stage_1_1" } })}
+          onPress={() => router.push({ pathname: "/battle", params: { stageId: "stage_1_1", dailyMode: "1" } })}
         >
           <Text style={styles.startBtnText}>{"\u25B6 \u30C1\u30E3\u30EC\u30F3\u30B8\u958B\u59CB"}</Text>
         </TouchableOpacity>

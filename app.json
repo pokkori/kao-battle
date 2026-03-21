@@ -7,6 +7,8 @@
     "userInterfaceStyle": "dark",
     "scheme": "facefight",
     "newArchEnabled": true,
+    "description": "顔バトル - 自分の表情でバトル！怒り顔でパンチ、笑顔でバリア。顔認識AI搭載の顔バトルゲーム。キーワード: 顔ゲーム 表情ゲーム 顔認識 カメラゲーム バトルゲーム face game",
+    "keywords": ["顔バトル", "表情ゲーム", "顔認識", "カメラゲーム", "FaceFight"],
     "ios": {
       "supportsTablet": false
     },
