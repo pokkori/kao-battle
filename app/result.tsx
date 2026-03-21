@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform, Image } f
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { getStage, getNextStageId } from "../lib/battle/stageManager";
 import { RankGrade } from "../types/player";
+import { generateShareCard } from "../lib/share/generateShareCard";
 
 const RANK_COLORS: Record<RankGrade, string> = {
   S: "#ffd700", A: "#4CAF50", B: "#2196F3", C: "#9e9e9e", D: "#795548",
@@ -35,6 +36,7 @@ export default function ResultScreen() {
   const [displayScore, setDisplayScore] = useState(0);
   const [shareText, setShareText] = useState<string | null>(null);
   const [capturedFace, setCapturedFace] = useState<string | null>(null);
+  const [shareCardUrl, setShareCardUrl] = useState<string | null>(null);
   const scaleAnim = React.useRef(new Animated.Value(0)).current;
   const faceScaleAnim = React.useRef(new Animated.Value(0)).current;
   const starAnims = React.useRef([
@@ -55,6 +57,23 @@ export default function ResultScreen() {
       } catch {}
     }
   }, []);
+
+  // Generate OGP share card when face is available
+  useEffect(() => {
+    if (capturedFace && Platform.OS === "web" && won) {
+      generateShareCard({
+        faceImageDataUrl: capturedFace,
+        stageName: stage?.name ?? stageId,
+        rank,
+        score,
+        maxCombo,
+      }).then((url) => {
+        setShareCardUrl(url);
+      }).catch(() => {
+        // Silently fail
+      });
+    }
+  }, [capturedFace, won]);
 
   useEffect(() => {
     Animated.spring(scaleAnim, { toValue: 1, tension: 50, friction: 5, useNativeDriver: true }).start();
@@ -105,7 +124,23 @@ export default function ResultScreen() {
     const text = `\u9854\u30D0\u30C8\u30EB ${stageName} ${won ? "\u30AF\u30EA\u30A2\uFF01" : "\u6311\u6226\u4E2D..."}\n${RANK_EMOJIS[rank]} \u30E9\u30F3\u30AF${rank} \uD83D\uDC4A\u30B9\u30B3\u30A2${score.toLocaleString()}\n\u30B3\u30F3\u30DC x${maxCombo} | \u6483\u7834 ${defeated}/${total}\n#\u9854\u30D0\u30C8\u30EB #FaceFight`;
 
     if (Platform.OS === "web") {
-      // Web: copy to clipboard
+      // Try Web Share API with share card image
+      if (shareCardUrl && navigator.share) {
+        try {
+          const response = await fetch(shareCardUrl);
+          const blob = await response.blob();
+          const file = new File([blob], "face-fight-result.jpg", { type: "image/jpeg" });
+          await navigator.share({
+            text,
+            files: [file],
+          });
+          return;
+        } catch {
+          // Fall through to clipboard
+        }
+      }
+
+      // Fallback: copy text to clipboard
       try {
         if (navigator.clipboard) {
           await navigator.clipboard.writeText(text);
@@ -117,12 +152,21 @@ export default function ResultScreen() {
         setTimeout(() => setShareText(null), 5000);
       }
     } else {
-      // Native: use Share API
       try {
         const { Share } = require("react-native");
         await Share.share({ message: text });
       } catch {}
     }
+  };
+
+  const handleDownloadCard = () => {
+    if (!shareCardUrl || Platform.OS !== "web") return;
+    try {
+      const a = document.createElement("a");
+      a.href = shareCardUrl;
+      a.download = "face-fight-result.jpg";
+      a.click();
+    } catch {}
   };
 
   const starCount = rank === "S" ? 3 : rank === "A" ? 3 : rank === "B" ? 2 : rank === "C" ? 1 : 0;
@@ -154,8 +198,25 @@ export default function ResultScreen() {
         </View>
       )}
 
-      {/* Captured face photo */}
-      {capturedFace && Platform.OS === "web" && (
+      {/* Share card preview (OGP card) */}
+      {shareCardUrl && Platform.OS === "web" && (
+        <View style={styles.shareCardContainer}>
+          <img
+            src={shareCardUrl}
+            style={{
+              width: 300,
+              height: 157,
+              borderRadius: 8,
+              objectFit: "cover",
+              border: "2px solid #e94560",
+            } as any}
+            alt="Share card"
+          />
+        </View>
+      )}
+
+      {/* Captured face photo (when no share card) */}
+      {capturedFace && !shareCardUrl && Platform.OS === "web" && (
         <Animated.View style={[styles.capturedFaceContainer, { transform: [{ scale: faceScaleAnim }] }]}>
           <View style={styles.capturedFaceFrame}>
             <img
@@ -220,6 +281,13 @@ export default function ResultScreen() {
           <Text style={styles.shareBtnText}>{"\uD83D\uDCE4 \u7D50\u679C\u3092\u30B7\u30A7\u30A2"}</Text>
         </TouchableOpacity>
 
+        {/* Download share card button */}
+        {shareCardUrl && Platform.OS === "web" && (
+          <TouchableOpacity style={styles.downloadBtn} onPress={handleDownloadCard}>
+            <Text style={styles.downloadBtnText}>{"\uD83D\uDCBE \u30B7\u30A7\u30A2\u30AB\u30FC\u30C9\u4FDD\u5B58"}</Text>
+          </TouchableOpacity>
+        )}
+
         {won && nextStageId && (
           <TouchableOpacity
             style={styles.nextBtn}
@@ -260,6 +328,13 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: "bold", color: "#fff", marginBottom: 10 },
   starsRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
   star: { fontSize: 36, fontWeight: "bold" },
+  // Share card preview
+  shareCardContainer: {
+    alignItems: "center",
+    marginBottom: 12,
+    borderRadius: 10,
+    overflow: "hidden",
+  },
   // Captured face photo
   capturedFaceContainer: {
     alignItems: "center",
@@ -339,6 +414,15 @@ const styles = StyleSheet.create({
     borderColor: "#4fc3f7",
   },
   shareBtnText: { color: "#4fc3f7", fontSize: 16, fontWeight: "bold" },
+  downloadBtn: {
+    backgroundColor: "#16213e",
+    paddingVertical: 10,
+    paddingHorizontal: 30,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: "#e94560",
+  },
+  downloadBtnText: { color: "#e94560", fontSize: 14, fontWeight: "bold" },
   nextBtn: { backgroundColor: "#e94560", paddingVertical: 14, paddingHorizontal: 40, borderRadius: 25 },
   nextBtnText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
   retryBtn: { backgroundColor: "#e94560", paddingVertical: 14, paddingHorizontal: 40, borderRadius: 25 },

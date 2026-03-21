@@ -6,7 +6,9 @@ import { useExpression } from "../hooks/useExpression";
 import { usePlayerData } from "../hooks/useStorage";
 import { useBattleSE } from "../hooks/useBattleSE";
 import { useWebCamera } from "../hooks/useWebCamera";
+import { useMediaPipeFace } from "../hooks/useMediaPipeFace";
 import { getStage } from "../lib/battle/stageManager";
+import { getCalibrated } from "../lib/face/calibration";
 import { ExpressionType } from "../types/expression";
 import { SkillType, SKILLS } from "../types/battle";
 
@@ -36,7 +38,6 @@ const EXPRESSION_TO_SKILL: Record<ExpressionType, SkillType> = {
   angry: "punch", happy: "barrier", surprise: "beam", sad: "heal", neutral: "idle",
 };
 
-// Guide text for each expression button
 const EXPRESSION_GUIDE: Record<ExpressionType, string> = {
   angry: "\u773C\u3092\u3064\u308A\u4E0A\u3052\u3066\uFF01",
   happy: "\u30CB\u30B3\u30C3\u3068\u7B11\u3063\u3066\uFF01",
@@ -45,26 +46,24 @@ const EXPRESSION_GUIDE: Record<ExpressionType, string> = {
   neutral: "",
 };
 
-// Enemy display emoji based on type
 const ENEMY_EMOJIS: Record<string, string> = {
-  e_slime: "\uD83D\uDFE2",
-  e_wooden_dummy: "\uD83E\uDEAB",
-  e_ninja: "\uD83E\uDD77",
-  e_sumo: "\uD83D\uDCAA",
-  e_boss_sensei: "\uD83E\uDD4B",
-  e_fire_imp: "\uD83D\uDD25",
-  e_lava_golem: "\uD83C\uDF0B",
-  e_flame_dancer: "\uD83D\uDC83",
-  e_boss_volcano_dragon: "\uD83D\uDC32",
-  e_clown: "\uD83E\uDD21",
-  e_puppet: "\uD83E\uDE86",
-  e_mirror: "\uD83E\uDE9E",
-  e_boss_ringmaster: "\uD83C\uDFA9",
-  e_alien: "\uD83D\uDC7D",
-  e_space_jellyfish: "\uD83E\uDEBC",
-  e_boss_cosmos_emperor: "\uD83D\uDE80",
-  e_emotion_ghost: "\uD83D\uDC7B",
-  e_boss_emotion_king: "\uD83D\uDC51",
+  e_slime: "\uD83D\uDFE2", e_wooden_dummy: "\uD83E\uDEAB", e_ninja: "\uD83E\uDD77",
+  e_sumo: "\uD83D\uDCAA", e_boss_sensei: "\uD83E\uDD4B", e_fire_imp: "\uD83D\uDD25",
+  e_lava_golem: "\uD83C\uDF0B", e_flame_dancer: "\uD83D\uDC83",
+  e_boss_volcano_dragon: "\uD83D\uDC32", e_clown: "\uD83E\uDD21",
+  e_puppet: "\uD83E\uDE86", e_mirror: "\uD83E\uDE9E",
+  e_boss_ringmaster: "\uD83C\uDFA9", e_alien: "\uD83D\uDC7D",
+  e_space_jellyfish: "\uD83E\uDEBC", e_boss_cosmos_emperor: "\uD83D\uDE80",
+  e_emotion_ghost: "\uD83D\uDC7B", e_boss_emotion_king: "\uD83D\uDC51",
+};
+
+// Skill ring colors per design
+const SKILL_RING_COLORS: Record<SkillType, string> = {
+  punch: "#e94560",   // red
+  barrier: "#4fc3f7", // blue
+  beam: "#ffd700",    // yellow
+  heal: "#4CAF50",    // green
+  idle: "transparent",
 };
 
 export default function BattleScreen() {
@@ -74,22 +73,48 @@ export default function BattleScreen() {
   const stage = getStage(stageId) ?? null;
   const { player, update } = usePlayerData();
   const { state, battleResult, lastDamage, actions } = useBattle(stage, player.equippedPunchEffect, player.equippedBeamEffect);
-  const { expression, forceExpression } = useExpression(
-    state.phase === "fight" || state.phase === "boss_fight"
-  );
-  const { playSE } = useBattleSE();
 
   const isFighting = state.phase === "fight" || state.phase === "boss_fight";
 
   // Web camera
-  const { videoRef: setVideoRef, cameraReady, cameraError, captureFrame } = useWebCamera(isFighting);
+  const { videoRef: setVideoRef, cameraReady, cameraError, captureFrame, stopCamera } = useWebCamera(isFighting);
+
+  // Store actual video element ref for MediaPipe
+  const videoElRef = useRef<HTMLVideoElement | null>(null);
+  const setVideoElRef = useCallback((el: HTMLVideoElement | null) => {
+    videoElRef.current = el;
+    setVideoRef(el);
+  }, [setVideoRef]);
+
+  // MediaPipe face detection
+  const { blendshapes, status: mpStatus, error: mpError } = useMediaPipeFace(videoElRef, isFighting && cameraReady);
+  const mediaPipeReady = mpStatus === "ready";
+  const mediaPipeError = mpStatus === "error";
+
+  // Expression with MediaPipe blendshapes
+  const { expression, forceExpression } = useExpression(
+    isFighting,
+    blendshapes,
+    mediaPipeReady,
+    mediaPipeError
+  );
+
+  const { playSE, startBGM, stopBGM, pauseBGM, resumeBGM } = useBattleSE();
 
   // Tutorial state
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
 
-  // Captured face for result
+  // Captured face frames for result (max 5)
+  const capturedFramesRef = useRef<{ dataUrl: string; score: number }[]>([]);
   const capturedFaceRef = useRef<string | null>(null);
+
+  // Skill ring effect
+  const [skillRingColor, setSkillRingColor] = useState("transparent");
+  const skillRingOpacity = useRef(new Animated.Value(0)).current;
+
+  // Calibration check
+  const [calibrationChecked, setCalibrationChecked] = useState(false);
 
   // Animation refs
   const flashOpacity = useRef(new Animated.Value(0)).current;
@@ -100,15 +125,10 @@ export default function BattleScreen() {
   const enemyShakeAnim = useRef(new Animated.Value(0)).current;
   const playerHpAnim = useRef(new Animated.Value(100)).current;
   const enemyHpAnim = useRef(new Animated.Value(100)).current;
-
-  // Enemy bounce animation (attack)
   const enemyBounceAnim = useRef(new Animated.Value(0)).current;
-  // Shockwave animation (player attack)
   const shockwaveScale = useRef(new Animated.Value(0)).current;
   const shockwaveOpacity = useRef(new Animated.Value(0)).current;
-  // REC blink animation
   const recBlink = useRef(new Animated.Value(1)).current;
-  // Camera overlay color animation
   const cameraOverlayOpacity = useRef(new Animated.Value(0)).current;
   const [cameraOverlayColor, setCameraOverlayColor] = useState("#4fc3f7");
 
@@ -116,11 +136,18 @@ export default function BattleScreen() {
   const [speechBubble, setSpeechBubble] = useState<string | null>(null);
   const speechTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Track last enemy for enter/defeat lines
   const lastEnemyId = useRef<string | null>(null);
-
-  // Track last combo for combo SE
   const lastCombo = useRef(0);
+
+  // Check calibration on mount — redirect if first time
+  useEffect(() => {
+    if (Platform.OS === "web" && !calibrationChecked) {
+      setCalibrationChecked(true);
+      if (!getCalibrated()) {
+        router.push("/calibration");
+      }
+    }
+  }, [calibrationChecked]);
 
   // REC blink loop
   useEffect(() => {
@@ -173,23 +200,36 @@ export default function BattleScreen() {
   // Animate HP bars
   useEffect(() => {
     const hpPct = (state.playerHP / state.playerMaxHP) * 100;
-    Animated.timing(playerHpAnim, {
-      toValue: hpPct,
-      duration: 300,
-      useNativeDriver: false,
-    }).start();
+    Animated.timing(playerHpAnim, { toValue: hpPct, duration: 300, useNativeDriver: false }).start();
   }, [state.playerHP]);
 
   useEffect(() => {
     const enemyHpPct = state.currentEnemy ? (state.enemyHP / state.currentEnemy.hp) * 100 : 0;
-    Animated.timing(enemyHpAnim, {
-      toValue: Math.max(0, enemyHpPct),
-      duration: 300,
-      useNativeDriver: false,
-    }).start();
+    Animated.timing(enemyHpAnim, { toValue: Math.max(0, enemyHpPct), duration: 300, useNativeDriver: false }).start();
   }, [state.enemyHP, state.currentEnemy]);
 
-  // Handle damage effects + SE
+  // BGM: start on fight, stop on win/lose, pause on paused
+  useEffect(() => {
+    if (state.phase === "fight" && stage) {
+      startBGM(stage.world, false);
+    } else if (state.phase === "boss_fight" && stage) {
+      stopBGM();
+      startBGM(stage.world, true);
+    } else if (state.phase === "paused") {
+      pauseBGM();
+    } else if (state.phase === "win" || state.phase === "lose") {
+      stopBGM();
+    }
+  }, [state.phase, stage]);
+
+  // Resume BGM when unpausing
+  useEffect(() => {
+    if (state.phase === "fight" || state.phase === "boss_fight") {
+      resumeBGM();
+    }
+  }, [state.phase]);
+
+  // Handle damage effects + SE + capture frame on skill activation
   useEffect(() => {
     if (lastDamage) {
       if (lastDamage.type === "player_attack") {
@@ -200,11 +240,16 @@ export default function BattleScreen() {
         triggerCameraOverlay("#4fc3f7");
         triggerHaptic("impact");
 
-        // Determine skill SE from current expression
+        // Skill ring effect
         const skill = EXPRESSION_TO_SKILL[expression.dominant];
+        triggerSkillRing(skill);
+
         if (skill === "punch") playSE("punch");
         else if (skill === "beam") playSE("beam");
         else playSE("punch");
+
+        // Capture frame on skill activation (max 5)
+        captureAndStore(expression.scores[expression.dominant]);
 
         if (lastDamage.enemyDefeated && state.currentEnemy) {
           showSpeechBubble(lastDamage.defeatLine || "...");
@@ -222,21 +267,29 @@ export default function BattleScreen() {
         triggerCameraOverlay("#4CAF50");
         triggerHaptic("light");
         playSE("heal");
+        triggerSkillRing("heal");
+        captureAndStore(expression.scores[expression.dominant]);
       }
     }
   }, [lastDamage]);
 
-  // Win/Lose SE + capture face on win
+  // Win/Lose SE + select best face
   useEffect(() => {
     if (state.phase === "win") {
       playSE("win");
-      // Capture face screenshot on victory
-      const frame = captureFrame();
-      if (frame) {
-        capturedFaceRef.current = frame;
+      stopBGM();
+      // Pick best captured frame
+      const frames = capturedFramesRef.current;
+      if (frames.length > 0) {
+        frames.sort((a, b) => b.score - a.score);
+        capturedFaceRef.current = frames[0].dataUrl;
+      } else {
+        const frame = captureFrame();
+        if (frame) capturedFaceRef.current = frame;
       }
     } else if (state.phase === "lose") {
       playSE("gameOver");
+      stopBGM();
     }
   }, [state.phase, playSE, captureFrame]);
 
@@ -301,14 +354,27 @@ export default function BattleScreen() {
     return STAGES[idx + 1].id;
   };
 
+  // Capture and store frame
+  const captureAndStore = (score: number) => {
+    const frame = captureFrame();
+    if (frame) {
+      const frames = capturedFramesRef.current;
+      if (frames.length < 5) {
+        frames.push({ dataUrl: frame, score });
+      } else {
+        // Replace lowest score
+        const minIdx = frames.reduce((mi, f, i, arr) => f.score < arr[mi].score ? i : mi, 0);
+        if (score > frames[minIdx].score) {
+          frames[minIdx] = { dataUrl: frame, score };
+        }
+      }
+    }
+  };
+
   // Effect helpers
   const triggerFlash = (color: string) => {
     flashOpacity.setValue(0.4);
-    Animated.timing(flashOpacity, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
+    Animated.timing(flashOpacity, { toValue: 0, duration: 200, useNativeDriver: true }).start();
   };
 
   const showDamagePopup = (text: string, color: string) => {
@@ -317,16 +383,8 @@ export default function BattleScreen() {
     damagePopAnim.setValue(0);
     damagePopOpacity.setValue(1);
     Animated.parallel([
-      Animated.timing(damagePopAnim, {
-        toValue: -60,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(damagePopOpacity, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
+      Animated.timing(damagePopAnim, { toValue: -60, duration: 600, useNativeDriver: true }),
+      Animated.timing(damagePopOpacity, { toValue: 0, duration: 600, useNativeDriver: true }),
     ]).start();
   };
 
@@ -359,11 +417,13 @@ export default function BattleScreen() {
   const triggerCameraOverlay = (color: string) => {
     setCameraOverlayColor(color);
     cameraOverlayOpacity.setValue(0.4);
-    Animated.timing(cameraOverlayOpacity, {
-      toValue: 0,
-      duration: 400,
-      useNativeDriver: true,
-    }).start();
+    Animated.timing(cameraOverlayOpacity, { toValue: 0, duration: 400, useNativeDriver: true }).start();
+  };
+
+  const triggerSkillRing = (skill: SkillType) => {
+    setSkillRingColor(SKILL_RING_COLORS[skill] ?? "transparent");
+    skillRingOpacity.setValue(0.8);
+    Animated.timing(skillRingOpacity, { toValue: 0, duration: 500, useNativeDriver: true }).start();
   };
 
   const triggerHaptic = async (type: "impact" | "warning" | "light") => {
@@ -396,10 +456,8 @@ export default function BattleScreen() {
   const hpPercent = (state.playerHP / state.playerMaxHP) * 100;
   const enemyHpPercent = state.currentEnemy ? (state.enemyHP / state.currentEnemy.hp) * 100 : 0;
 
-  // Expression buttons for web testing
   const expressionButtons: ExpressionType[] = ["angry", "happy", "surprise", "sad"];
 
-  // Get enemy color based on HP percentage
   const getHpColor = (percent: number) => {
     if (percent > 60) return "#4CAF50";
     if (percent > 30) return "#FFC107";
@@ -423,6 +481,16 @@ export default function BattleScreen() {
 
   const getEnemyEmoji = (enemy: { id: string; isBoss: boolean }) => {
     return ENEMY_EMOJIS[enemy.id] || (enemy.isBoss ? "\uD83D\uDC79" : "\uD83D\uDC7E");
+  };
+
+  // Expression meter bars (4-direction)
+  const meterExpressions: ExpressionType[] = ["angry", "happy", "surprise", "sad"];
+  const meterColors: Record<ExpressionType, string> = {
+    angry: "#e94560",
+    happy: "#4fc3f7",
+    surprise: "#ffd700",
+    sad: "#4CAF50",
+    neutral: "#666",
   };
 
   return (
@@ -482,13 +550,19 @@ export default function BattleScreen() {
             <Text style={styles.pauseBtn}>{"\u23F8"}</Text>
           </TouchableOpacity>
         </View>
-        {/* Barrier indicator */}
         {state.barrierActive && (
           <View style={styles.barrierIndicator}>
             <Text style={styles.barrierText}>{"\uD83D\uDEE1\uFE0F \u30D0\u30EA\u30A2\u5C55\u958B\u4E2D"}</Text>
           </View>
         )}
       </View>
+
+      {/* MediaPipe loading overlay */}
+      {isFighting && mpStatus === "loading" && (
+        <View style={styles.mpLoadingOverlay}>
+          <Text style={styles.mpLoadingText}>{"\u9854\u8A8D\u8B58\u3092\u6E96\u5099\u4E2D..."}</Text>
+        </View>
+      )}
 
       {/* Tutorial overlay */}
       {showTutorial && state.phase === "ready" && (
@@ -539,7 +613,7 @@ export default function BattleScreen() {
           <TouchableOpacity style={styles.resumeBtn} onPress={actions.resume}>
             <Text style={styles.resumeBtnText}>{"\u518D\u958B"}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quitBtn} onPress={() => router.replace("/stage-select")}>
+          <TouchableOpacity style={styles.quitBtn} onPress={() => { stopBGM(); router.replace("/stage-select"); }}>
             <Text style={styles.quitBtnText}>{"\u30B9\u30C6\u30FC\u30B8\u9078\u629E\u306B\u623B\u308B"}</Text>
           </TouchableOpacity>
         </View>
@@ -557,10 +631,9 @@ export default function BattleScreen() {
         </View>
       )}
 
-      {/* Enemy area - enlarged */}
+      {/* Enemy area */}
       {state.currentEnemy && isFighting && (
         <View style={styles.enemyArea}>
-          {/* Speech bubble */}
           {speechBubble && (
             <View style={styles.speechBubble}>
               <Text style={styles.speechText}>{speechBubble}</Text>
@@ -568,7 +641,6 @@ export default function BattleScreen() {
             </View>
           )}
 
-          {/* Damage popup */}
           <Animated.Text
             style={[
               styles.damagePopup,
@@ -601,10 +673,7 @@ export default function BattleScreen() {
               {getEnemyEmoji(state.currentEnemy)}
             </Text>
           </Animated.View>
-          <Text style={[
-            styles.enemyName,
-            state.currentEnemy.isBoss && styles.bossName,
-          ]}>
+          <Text style={[styles.enemyName, state.currentEnemy.isBoss && styles.bossName]}>
             {state.currentEnemy.isBoss ? `\u2605 ${state.currentEnemy.name} \u2605` : state.currentEnemy.name}
           </Text>
           <View style={styles.enemyHpBarOuter}>
@@ -647,16 +716,15 @@ export default function BattleScreen() {
         </View>
       )}
 
-      {/* Camera preview area with real camera (web) or emoji fallback */}
+      {/* Camera preview area with expression meter overlay */}
       {isFighting && (
         <View style={styles.cameraPreview}>
           <View style={styles.cameraFrame}>
-            {/* Web: real camera feed */}
             {Platform.OS === "web" ? (
               <>
                 {cameraReady ? (
                   <video
-                    ref={(el: any) => setVideoRef(el)}
+                    ref={(el: any) => setVideoElRef(el)}
                     autoPlay
                     playsInline
                     muted
@@ -697,6 +765,17 @@ export default function BattleScreen() {
                 },
               ]}
             />
+            {/* Skill ring effect */}
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.skillRing,
+                {
+                  borderColor: skillRingColor,
+                  opacity: skillRingOpacity,
+                },
+              ]}
+            />
             {/* REC indicator */}
             <Animated.View style={[styles.recBadge, { opacity: recBlink }]}>
               <View style={styles.recDot} />
@@ -706,13 +785,45 @@ export default function BattleScreen() {
           <Text style={styles.cameraLabel}>
             {`${EXPRESSION_EMOJI[expression.dominant]} ${EXPRESSION_LABELS[expression.dominant]} ${Math.round(expression.scores[expression.dominant] * 100)}%`}
           </Text>
-          <View style={styles.detectionBar}>
-            <View style={[styles.detectionFill, { width: `${expression.scores[expression.dominant] * 100}%` }]} />
+
+          {/* Face not detected warning */}
+          {!expression.faceDetected && mediaPipeReady && (
+            <Text style={styles.faceWarning}>{"\u9854\u3092\u30AB\u30E1\u30E9\u306B\u5411\u3051\u3066\u304F\u3060\u3055\u3044"}</Text>
+          )}
+
+          {/* Expression meter - 4 directional bars */}
+          <View style={styles.meterContainer}>
+            {meterExpressions.map((expr) => {
+              const val = expression.scores[expr];
+              const pct = Math.round(val * 100);
+              const threshold = 40; // 0.4 threshold line
+              return (
+                <View key={expr} style={styles.meterRow}>
+                  <Text style={[styles.meterLabel, { color: meterColors[expr] }]}>
+                    {EXPRESSION_EMOJI[expr]}
+                  </Text>
+                  <View style={styles.meterBarOuter}>
+                    <View
+                      style={[
+                        styles.meterBarInner,
+                        {
+                          width: `${Math.min(pct, 100)}%`,
+                          backgroundColor: pct >= threshold ? meterColors[expr] : `${meterColors[expr]}80`,
+                        },
+                      ]}
+                    />
+                    {/* Threshold line */}
+                    <View style={[styles.meterThreshold, { left: `${threshold}%` }]} />
+                  </View>
+                  <Text style={styles.meterValue}>{pct}%</Text>
+                </View>
+              );
+            })}
           </View>
         </View>
       )}
 
-      {/* Expression control cards - 2x2 grid with guide text */}
+      {/* Expression control cards - 2x2 grid */}
       {isFighting && (
         <View style={styles.cardGrid}>
           {expressionButtons.map((expr) => {
@@ -746,7 +857,6 @@ export default function BattleScreen() {
                 ]}>
                   {SKILL_DAMAGE[skill]}
                 </Text>
-                {/* Face guide text */}
                 <Text style={styles.skillGuideText}>{EXPRESSION_GUIDE[expr]}</Text>
                 {isWeakness && (
                   <View style={styles.weaknessTag}>
@@ -806,6 +916,22 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   barrierText: { color: "#4fc3f7", fontSize: 12, fontWeight: "bold" },
+  // MediaPipe loading
+  mpLoadingOverlay: {
+    position: "absolute",
+    top: 100,
+    alignSelf: "center",
+    backgroundColor: "rgba(0,0,0,0.7)",
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    zIndex: 15,
+  },
+  mpLoadingText: {
+    color: "#4fc3f7",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.8)",
@@ -897,7 +1023,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   promptText: { color: "#fff", fontSize: 20, fontWeight: "bold" },
-  // Camera preview with REC
+  // Camera preview with expression meter
   cameraPreview: {
     alignSelf: "center",
     backgroundColor: "#16213e",
@@ -907,7 +1033,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
     borderColor: "#0f3460",
-    minWidth: 200,
+    minWidth: 240,
   },
   cameraFrame: {
     width: 88,
@@ -943,6 +1069,15 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     borderRadius: 44,
   },
+  skillRing: {
+    position: "absolute",
+    top: -6,
+    left: -6,
+    right: -6,
+    bottom: -6,
+    borderRadius: 50,
+    borderWidth: 4,
+  },
   recBadge: {
     position: "absolute",
     top: 4,
@@ -967,18 +1102,52 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   cameraLabel: { color: "#aaa", fontSize: 13, marginTop: 4 },
-  detectionBar: {
-    width: 160,
-    height: 4,
-    backgroundColor: "#333",
-    borderRadius: 2,
-    marginTop: 3,
-    overflow: "hidden",
+  faceWarning: {
+    color: "#ff9800",
+    fontSize: 11,
+    fontWeight: "bold",
+    marginTop: 2,
   },
-  detectionFill: {
+  // Expression meter (4 directional bars)
+  meterContainer: {
+    width: 220,
+    marginTop: 6,
+  },
+  meterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 3,
+    gap: 4,
+  },
+  meterLabel: {
+    fontSize: 14,
+    width: 20,
+    textAlign: "center",
+  },
+  meterBarOuter: {
+    flex: 1,
+    height: 8,
+    backgroundColor: "#333",
+    borderRadius: 4,
+    overflow: "hidden",
+    position: "relative",
+  },
+  meterBarInner: {
     height: "100%",
-    backgroundColor: "#4fc3f7",
-    borderRadius: 2,
+    borderRadius: 4,
+  },
+  meterThreshold: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    width: 2,
+    backgroundColor: "rgba(255,255,255,0.5)",
+  },
+  meterValue: {
+    color: "#888",
+    fontSize: 10,
+    width: 28,
+    textAlign: "right",
   },
   // 2x2 skill card grid
   cardGrid: {
@@ -1071,7 +1240,6 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 14,
     borderBottomRightRadius: 14,
   },
-  // Tutorial styles
   tutorialOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.85)",

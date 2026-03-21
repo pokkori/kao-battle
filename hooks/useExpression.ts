@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { ExpressionResult, ExpressionType, ExpressionScores, FaceLandmarks, FaceLandmark } from "../types/expression";
-import { generateMockExpression, getDominantExpression } from "../lib/face/expressionClassifier";
+import {
+  generateMockExpression,
+  getDominantExpression,
+  classifyExpressionFromBlendshapes,
+} from "../lib/face/expressionClassifier";
+import { BlendshapeMap } from "./useMediaPipeFace";
 
 const ZERO_LANDMARK: FaceLandmark = { x: 0, y: 0, z: 0 };
 const ZERO_LANDMARKS: FaceLandmarks = {
@@ -14,10 +19,14 @@ const ZERO_LANDMARKS: FaceLandmarks = {
 
 /**
  * Expression detection hook.
- * On web/dev: uses mock expression cycling.
- * On native with camera: would use MediaPipe (not implemented in this build).
+ * Uses MediaPipe blendshapes when available, falls back to mock when MediaPipe fails.
  */
-export function useExpression(active: boolean) {
+export function useExpression(
+  active: boolean,
+  blendshapes?: BlendshapeMap | null,
+  mediaPipeReady?: boolean,
+  mediaPipeError?: boolean
+) {
   const [result, setResult] = useState<ExpressionResult>({
     dominant: "neutral",
     scores: { angry: 0, happy: 0, surprise: 0, sad: 0, neutral: 1 },
@@ -29,8 +38,39 @@ export function useExpression(active: boolean) {
   const tickRef = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // MediaPipe path: use blendshapes when available
+  useEffect(() => {
+    if (!active || !mediaPipeReady || mediaPipeError) return;
+
+    if (blendshapes) {
+      const scores = classifyExpressionFromBlendshapes(blendshapes);
+      const dominant = getDominantExpression(scores);
+      setResult({
+        dominant,
+        scores,
+        landmarks: ZERO_LANDMARKS,
+        timestamp: Date.now(),
+        faceDetected: true,
+      });
+    } else {
+      // blendshapes is null = no face detected
+      setResult((prev) => ({
+        ...prev,
+        faceDetected: false,
+        timestamp: Date.now(),
+      }));
+    }
+  }, [active, blendshapes, mediaPipeReady, mediaPipeError]);
+
+  // Fallback path: mock expression when MediaPipe load failed
   useEffect(() => {
     if (!active) {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      return;
+    }
+
+    // Only use mock if MediaPipe errored
+    if (!mediaPipeError) {
       if (intervalRef.current) clearInterval(intervalRef.current);
       return;
     }
@@ -51,9 +91,9 @@ export function useExpression(active: boolean) {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [active]);
+  }, [active, mediaPipeError]);
 
-  /** Force a specific expression (for testing/demo) */
+  /** Force a specific expression (for button fallback) */
   const forceExpression = useCallback((type: ExpressionType) => {
     const scores: ExpressionScores = { angry: 0.1, happy: 0.1, surprise: 0.1, sad: 0.1, neutral: 0.1 };
     scores[type] = 0.85;
