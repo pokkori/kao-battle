@@ -55,9 +55,19 @@ export interface BattleResult {
   totalDamageTaken: number;
 }
 
+export interface DamageEvent {
+  type: "player_attack" | "enemy_attack" | "heal";
+  amount: number;
+  critical?: boolean;
+  timestamp: number;
+  enemyDefeated?: boolean;
+  defeatLine?: string;
+}
+
 export function useBattle(stage: StageData | null, equippedPunch: string, equippedBeam: string) {
   const [state, setState] = useState<BattleState>(INITIAL_STATE);
   const [battleResult, setBattleResult] = useState<BattleResult | null>(null);
+  const [lastDamage, setLastDamage] = useState<DamageEvent | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -114,6 +124,7 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
       enemyAttackTimer: first ? (pickAttack(first).interval) : 3000,
     });
     setBattleResult(null);
+    setLastDamage(null);
 
     // Start intro sequence
     setTimeout(() => {
@@ -177,16 +188,24 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
               next.currentEnemy = { ...next.currentEnemy, currentHP: healed };
               next.enemyHP = healed;
             } else if (attack.type === "rapid" && attack.hitCount) {
+              let totalDmg = 0;
               for (let i = 0; i < attack.hitCount; i++) {
                 const hitDmg = calculateEnemyDamage({ ...attack, damage: attack.damage }, next.barrierActive, SKILLS.barrier.basePower);
                 next.playerHP -= hitDmg;
                 next.totalDamageTaken += hitDmg;
+                totalDmg += hitDmg;
                 if (!next.barrierActive && hitDmg > 0) next.combo = 0;
+              }
+              if (totalDmg > 0) {
+                setLastDamage({ type: "enemy_attack", amount: totalDmg, timestamp: Date.now() });
               }
             } else {
               next.playerHP -= dmg;
               next.totalDamageTaken += dmg;
               if (!next.barrierActive && dmg > 0) next.combo = 0;
+              if (dmg > 0) {
+                setLastDamage({ type: "enemy_attack", amount: dmg, timestamp: Date.now() });
+              }
             }
 
             if (attack.type === "debuff" && !next.barrierActive) {
@@ -250,7 +269,9 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
         next.barrierActive = true;
         next.barrierRemaining = 2000;
       } else if (skill === "heal") {
-        next.playerHP = Math.min(next.playerMaxHP, next.playerHP + skillData.basePower);
+        const healAmount = skillData.basePower;
+        next.playerHP = Math.min(next.playerMaxHP, next.playerHP + healAmount);
+        setLastDamage({ type: "heal", amount: healAmount, timestamp: Date.now() });
       } else if (skill === "punch" || skill === "beam") {
         const effect = skill === "punch" ? equippedPunch : equippedBeam;
         const dmgResult = calculatePlayerDamage(
@@ -264,7 +285,18 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
           next.currentEnemy = { ...next.currentEnemy, currentHP: Math.max(0, next.enemyHP) };
         }
 
-        if (next.enemyHP <= 0) {
+        const enemyDefeated = next.enemyHP <= 0;
+
+        setLastDamage({
+          type: "player_attack",
+          amount: dmgResult.damage,
+          critical: dmgResult.critical,
+          timestamp: Date.now(),
+          enemyDefeated,
+          defeatLine: enemyDefeated ? next.currentEnemy?.defeatLine : undefined,
+        });
+
+        if (enemyDefeated) {
           // Enemy defeated
           next.score += next.currentEnemy!.scoreReward;
           next.defeatedCount += 1;
@@ -382,6 +414,7 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
   return {
     state,
     battleResult,
+    lastDamage,
     actions: { start, pause, resume, processExpression },
   };
 }
