@@ -69,12 +69,13 @@ const SKILL_RING_COLORS: Record<SkillType, string> = {
 
 export default function BattleScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ stageId: string; dailyMode?: string }>();
+  const params = useLocalSearchParams<{ stageId: string; dailyMode?: string; dailyConstraint?: string }>();
   const stageId = params.stageId ?? "stage_1_1";
   const dailyMode = params.dailyMode ?? "0";
+  const dailyConstraint = params.dailyConstraint ?? "";
   const stage = getStage(stageId) ?? null;
   const { player, update } = usePlayerData();
-  const { state, battleResult, lastDamage, actions } = useBattle(stage, player.equippedPunchEffect, player.equippedBeamEffect);
+  const { state, battleResult, lastDamage, actions } = useBattle(stage, player.equippedPunchEffect, player.equippedBeamEffect, dailyConstraint || undefined);
 
   const isFighting = state.phase === "fight" || state.phase === "boss_fight";
 
@@ -139,6 +140,10 @@ export default function BattleScreen() {
   const recBlink = useRef(new Animated.Value(1)).current;
   const cameraOverlayOpacity = useRef(new Animated.Value(0)).current;
   const [cameraOverlayColor, setCameraOverlayColor] = useState("#4fc3f7");
+
+  // Enraged mode flash
+  const [enragedMode, setEnragedMode] = useState(false);
+  const enrageFlashOpacity = useRef(new Animated.Value(0)).current;
 
   // Enemy speech bubble
   const [speechBubble, setSpeechBubble] = useState<string | null>(null);
@@ -225,6 +230,19 @@ export default function BattleScreen() {
         Animated.timing(enemyBounceAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
       ]).start();
     }
+    const nowEnraged = state.currentEnemy !== null
+      && enemyHpPct <= 30
+      && state.enemyHP > 0;
+    if (nowEnraged && !enragedMode) {
+      setEnragedMode(true);
+      Animated.sequence([
+        Animated.timing(enrageFlashOpacity, { toValue: 0.6, duration: 100, useNativeDriver: true }),
+        Animated.timing(enrageFlashOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+        Animated.timing(enrageFlashOpacity, { toValue: 0.4, duration: 100, useNativeDriver: true }),
+        Animated.timing(enrageFlashOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
+      ]).start();
+    }
+    if (!nowEnraged) setEnragedMode(false);
   }, [state.enemyHP, state.currentEnemy]);
 
   // BGM: start on fight, stop on win/lose, pause on paused
@@ -379,6 +397,8 @@ export default function BattleScreen() {
             rank: battleResult.rank,
             coins: String(battleResult.coins),
             dailyMode,
+            dominantSkill: String(battleResult.dominantSkill),
+            enragedKills: String(battleResult.enragedKills),
           },
         });
       }, 1500);
@@ -579,6 +599,13 @@ export default function BattleScreen() {
 
   return (
     <View style={styles.container}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFillObject,
+          { opacity: enrageFlashOpacity, backgroundColor: "#FF0000", zIndex: 50 }
+        ]}
+      />
       {/* Attack flash overlay */}
       <Animated.View
         pointerEvents="none"
@@ -657,6 +684,21 @@ export default function BattleScreen() {
             },
           ]}
         />
+      )}
+
+      {/* Daily mode constraint banner */}
+      {dailyMode === "1" && (
+        <View style={{
+          backgroundColor: "rgba(255,215,0,0.2)",
+          borderBottomWidth: 1,
+          borderColor: "#ffd700",
+          paddingVertical: 4,
+          alignItems: "center",
+        }}>
+          <Text style={{ color: "#ffd700", fontSize: 14, fontWeight: "bold" }}>
+            {`今日の縛り: ${EXPRESSION_EMOJI[dailyConstraint as keyof typeof EXPRESSION_EMOJI] ?? "❓"}のみ！`}
+          </Text>
+        </View>
       )}
 
       {/* HUD */}

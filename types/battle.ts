@@ -100,6 +100,7 @@ export interface BattleState {
   enemyAttackTimer: number;
   requestedExpression: ExpressionType | null;
   snapshots: string[];
+  enragedKillCount: number;
 }
 
 /** コンボボーナス係数 */

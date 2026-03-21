@@ -30,6 +30,7 @@ const INITIAL_STATE: BattleState = {
   enemyAttackTimer: 3000,
   requestedExpression: null,
   snapshots: [],
+  enragedKillCount: 0,
 };
 
 function makeEnemyInstance(data: EnemyData): EnemyInstance {
@@ -53,6 +54,8 @@ export interface BattleResult {
   rank: RankGrade;
   coins: number;
   totalDamageTaken: number;
+  dominantSkill: SkillType;
+  enragedKills: number;
 }
 
 export interface DamageEvent {
@@ -65,7 +68,7 @@ export interface DamageEvent {
   skill?: SkillType;
 }
 
-export function useBattle(stage: StageData | null, equippedPunch: string, equippedBeam: string) {
+export function useBattle(stage: StageData | null, equippedPunch: string, equippedBeam: string, dailyConstraint?: string) {
   const [state, setState] = useState<BattleState>(INITIAL_STATE);
   const [battleResult, setBattleResult] = useState<BattleResult | null>(null);
   const [lastDamage, setLastDamage] = useState<DamageEvent | null>(null);
@@ -252,6 +255,11 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
       const threshold = 0.40;
       if (result.scores[expr] < threshold) return prev;
 
+      // Daily constraint check
+      if (dailyConstraint && expr !== dailyConstraint && expr !== "neutral" && expr !== "idle") {
+        return prev; // 縛り外の表情は不発
+      }
+
       // Check cooldown
       if (next.cooldowns[skill] > 0) return prev;
       if (skill === "idle") return prev;
@@ -279,11 +287,16 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
         setLastDamage({ type: "heal", amount: healAmount, timestamp: Date.now(), skill: "heal" });
       } else if (skill === "punch" || skill === "beam") {
         const effect = skill === "punch" ? equippedPunch : equippedBeam;
-        const dmgResult = calculatePlayerDamage(
-          skillData, result.scores[expr], next.combo, next.currentEnemy!, effect
-        );
-        next.enemyHP -= dmgResult.damage;
-        next.totalDamageDealt += dmgResult.damage;
+        const enemyHpRatioNow = next.currentEnemy
+          ? next.enemyHP / (next.currentEnemy.hp ?? 100)
+          : 1;
+        const isEnragedNow = enemyHpRatioNow <= 0.30 && next.enemyHP > 0;
+
+        const dmgResult = calculatePlayerDamage(skillData, result.scores[expr], next.combo, next.currentEnemy!, effect);
+        const finalDamage = isEnragedNow ? Math.round(dmgResult.damage * 2) : dmgResult.damage;
+
+        next.enemyHP -= finalDamage;
+        next.totalDamageDealt += finalDamage;
         next.score += dmgResult.critical ? 50 : 0;
 
         if (next.currentEnemy) {
@@ -294,13 +307,17 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
 
         setLastDamage({
           type: "player_attack",
-          amount: dmgResult.damage,
+          amount: finalDamage,
           critical: dmgResult.critical,
           timestamp: Date.now(),
           enemyDefeated,
           defeatLine: enemyDefeated ? next.currentEnemy?.defeatLine : undefined,
           skill,
         });
+
+        if (enemyDefeated && isEnragedNow) {
+          next.enragedKillCount += 1;
+        }
 
         if (enemyDefeated) {
           // Enemy defeated
@@ -366,6 +383,11 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
             }
             totalCoins = Math.round(totalCoins * rankMultiplier);
 
+            const skillEntries = Object.entries(next.skillUseCounts) as [SkillType, number][];
+            const dominantSkill = skillEntries
+              .filter(([k]) => k !== "idle")
+              .sort(([,a],[,b]) => b - a)[0]?.[0] ?? "punch";
+
             setBattleResult({
               won: true,
               score: next.score,
@@ -376,6 +398,8 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
               rank,
               coins: totalCoins,
               totalDamageTaken: next.totalDamageTaken,
+              dominantSkill,
+              enragedKills: next.enragedKillCount,
             });
           }
         }
@@ -405,6 +429,10 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
   useEffect(() => {
     if (state.phase === "lose" && !battleResult) {
       const rank = calculateRank(state, stage?.maxScore ?? 10000);
+      const skillEntries = Object.entries(state.skillUseCounts) as [SkillType, number][];
+      const dominantSkill = skillEntries
+        .filter(([k]) => k !== "idle")
+        .sort(([,a],[,b]) => b - a)[0]?.[0] ?? "punch";
       setBattleResult({
         won: false,
         score: state.score,
@@ -415,6 +443,8 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
         rank,
         coins: 0,
         totalDamageTaken: state.totalDamageTaken,
+        dominantSkill,
+        enragedKills: state.enragedKillCount,
       });
     }
   }, [state.phase, battleResult, state, stage, calculateRank]);

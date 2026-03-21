@@ -20,7 +20,7 @@ export default function ResultScreen() {
   const params = useLocalSearchParams<{
     stageId: string; won: string; score: string; maxCombo: string;
     defeated: string; total: string; elapsed: string; rank: string; coins: string;
-    dailyMode: string;
+    dailyMode: string; dominantSkill: string; enragedKills: string;
   }>();
 
   const stageId = params.stageId ?? "stage_1_1";
@@ -34,12 +34,20 @@ export default function ResultScreen() {
   const coins = parseInt(params.coins ?? "0", 10);
   const dailyMode = params.dailyMode === "1";
 
+  const DEFEAT_ADVICE: Record<string, string> = {
+    punch: "もっと怒り顔を練習しよう！鏡で確認してみて",
+    beam: "驚き顔が足りない！口をもっと大きく開けて",
+    barrier: "笑顔でバリアを張り続けよう",
+    heal: "回復タイミングが鍵！HP30%以下で優先して",
+  };
+
   const stage = getStage(stageId);
   const nextStageId = getNextStageId(stageId);
 
   const { updateRanking } = useRanking();
   const [displayScore, setDisplayScore] = useState(0);
   const [shareText, setShareText] = useState<string | null>(null);
+  const [todayEnragedKills, setTodayEnragedKills] = useState(0);
   const [capturedFace, setCapturedFace] = useState<string | null>(null);
   const [shareCardUrl, setShareCardUrl] = useState<string | null>(null);
   const [loginStreak, setLoginStreak] = useState(0);
@@ -57,6 +65,25 @@ export default function ResultScreen() {
       const today = new Date().toISOString().split("T")[0];
       updateRanking(stageId, score, rank, today);
     }
+  }, []);
+
+  // Enraged kills daily counter
+  useEffect(() => {
+    const updateEnragedKills = async () => {
+      try {
+        const today = new Date().toISOString().split("T")[0];
+        const key = `@facefight/enragedKills/${today}`;
+        const prev = parseInt((await AsyncStorage.getItem(key)) ?? "0", 10);
+        const kills = parseInt(String(params.enragedKills ?? "0"), 10);
+        if (kills > 0) {
+          await AsyncStorage.setItem(key, String(prev + kills));
+          setTodayEnragedKills(prev + kills);
+        } else {
+          setTodayEnragedKills(prev);
+        }
+      } catch {}
+    };
+    if (won) updateEnragedKills();
   }, []);
 
   // Daily streak tracking
@@ -170,8 +197,8 @@ export default function ResultScreen() {
     const streakText = loginStreak >= 2 ? ` ${loginStreak}\u65E5\u9023\u7D9A\uD83D\uDD25` : "";
     const dailyPrefix = dailyMode ? "\uD83D\uDCC5 \u30C7\u30A4\u30EA\u30FC\u6311\u6226 " : "";
     const dailyTags = dailyMode ? " #\u9854\u30D0\u30C8\u30EB\u30C7\u30A4\u30EA\u30FC #FaceFightDaily" : "";
-    const challengeMsg = won ? `\u3053\u306E\u8868\u60C5\u3067\u52DD\u3063\u305F\uFF01\u5148\u306B\u539F\u5BB9\u3092\u4E0B\u308D\u3057\u3066\u307F\u3066` : `\u8868\u60C5\u3067\u52D5\u304B\u3059\u30A2\u30AF\u30B7\u30E7\u30F3RPG`;
-    const text = `${dailyPrefix}\uD83D\uDCA5 ${challengeMsg}\n\u9854\u30D0\u30C8\u30EB ${stageName}${streakText} ${won ? "\u30AF\u30EA\u30A2\uFF01" : "\u6311\u6226\u4E2D..."}\n${RANK_EMOJIS[rank]} \u30E9\u30F3\u30AF${rank} \uD83D\uDC4A\u30B9\u30B3\u30A2${score.toLocaleString()} \u30B3\u30F3\u30DC x${maxCombo}\n#\u9854\u30D0\u30C8\u30EB #FaceFight #\u8868\u60C5\u30B2\u30FC\u30E0 #\u30AB\u30E1\u30E9\u30B2\u30FC\u30E0${dailyTags}`;
+    const enragedBoast = todayEnragedKills > 0 ? ` 激怒状態で${todayEnragedKills}体撃破💥` : "";
+    const text = `🔥 顔バトル${enragedBoast}\n${stageName} ${won ? "クリア！" : "挑戦中..."}\n${RANK_EMOJIS[rank]} ランク${rank} 👊スコア${score.toLocaleString()} コンボ x${maxCombo}\nあなたは激怒撃破できる？▼\n#顔バトル #FaceFight #表情ゲーム #カメラゲーム${dailyTags}`;
 
     if (Platform.OS === "web") {
       // Try Web Share API with share card image
@@ -352,6 +379,12 @@ export default function ResultScreen() {
           >
             <Text style={styles.nextBtnText}>{"\u6B21\u306E\u30B9\u30C6\u30FC\u30B8 \u25B6"}</Text>
           </TouchableOpacity>
+        )}
+
+        {!won && DEFEAT_ADVICE[params.dominantSkill] && (
+          <Text style={{ fontSize: 14, color: "#AAAAAA", textAlign: "center", marginTop: 8 }}>
+            💡 {DEFEAT_ADVICE[params.dominantSkill]}
+          </Text>
         )}
 
         {!won && (

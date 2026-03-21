@@ -4,6 +4,14 @@ import { useRouter } from "expo-router";
 import { usePlayerData } from "../hooks/useStorage";
 import { getDailyChallenges, LOGIN_BONUSES } from "../lib/data/dailyChallenges";
 
+const DAILY_CONSTRAINT_EXPRESSIONS = ["angry", "surprise", "sad", "happy"] as const;
+export function getDailyConstraint(): string {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((now.getTime() - start.getTime()) / 86400000);
+  return DAILY_CONSTRAINT_EXPRESSIONS[dayOfYear % 4];
+}
+
 export default function DailyScreen() {
   const router = useRouter();
   const { player, update, loaded } = usePlayerData();
@@ -74,7 +82,7 @@ export default function DailyScreen() {
 
         <TouchableOpacity
           style={styles.startBtn}
-          onPress={() => router.push({ pathname: "/battle", params: { stageId: "stage_1_1", dailyMode: "1" } })}
+          onPress={() => router.push({ pathname: "/battle", params: { stageId: "stage_1_1", dailyMode: "1", dailyConstraint: getDailyConstraint() } })}
         >
           <Text style={styles.startBtnText}>{"\u25B6 \u30C1\u30E3\u30EC\u30F3\u30B8\u958B\u59CB"}</Text>
         </TouchableOpacity>
