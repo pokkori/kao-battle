@@ -285,7 +285,7 @@ export default function BattleScreen() {
         const popupText = lastDamage.critical
           ? `⚡クリティカル！-${lastDamage.amount}`
           : isEnraged
-            ? `🔥-${lastDamage.amount * 2}（激怒ボーナス）`  // ★ダブルダメージは既存エンジンにないため表示のみ
+            ? `🔥-${lastDamage.amount}（激怒2倍！）`
             : `-${lastDamage.amount}`;
 
         showDamagePopup(popupText, popupColor);
