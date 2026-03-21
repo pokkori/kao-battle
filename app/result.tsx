@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform, Image } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { getStage, getNextStageId } from "../lib/battle/stageManager";
 import { RankGrade } from "../types/player";
@@ -34,15 +34,37 @@ export default function ResultScreen() {
 
   const [displayScore, setDisplayScore] = useState(0);
   const [shareText, setShareText] = useState<string | null>(null);
+  const [capturedFace, setCapturedFace] = useState<string | null>(null);
   const scaleAnim = React.useRef(new Animated.Value(0)).current;
+  const faceScaleAnim = React.useRef(new Animated.Value(0)).current;
   const starAnims = React.useRef([
     new Animated.Value(0),
     new Animated.Value(0),
     new Animated.Value(0),
   ]).current;
 
+  // Load captured face from sessionStorage (web only)
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      try {
+        const face = sessionStorage.getItem("face-fight-capture");
+        if (face) {
+          setCapturedFace(face);
+          sessionStorage.removeItem("face-fight-capture");
+        }
+      } catch {}
+    }
+  }, []);
+
   useEffect(() => {
     Animated.spring(scaleAnim, { toValue: 1, tension: 50, friction: 5, useNativeDriver: true }).start();
+
+    // Face photo pop-in animation
+    if (capturedFace) {
+      setTimeout(() => {
+        Animated.spring(faceScaleAnim, { toValue: 1, tension: 60, friction: 4, useNativeDriver: true }).start();
+      }, 600);
+    }
 
     // Score count-up
     const steps = 30;
@@ -69,7 +91,7 @@ export default function ResultScreen() {
     });
 
     return () => clearInterval(interval);
-  }, [score]);
+  }, [score, capturedFace]);
 
   const formatTime = (ms: number) => {
     const s = Math.floor(ms / 1000);
@@ -132,6 +154,46 @@ export default function ResultScreen() {
         </View>
       )}
 
+      {/* Captured face photo */}
+      {capturedFace && Platform.OS === "web" && (
+        <Animated.View style={[styles.capturedFaceContainer, { transform: [{ scale: faceScaleAnim }] }]}>
+          <View style={styles.capturedFaceFrame}>
+            <img
+              src={capturedFace}
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: 40,
+                objectFit: "cover",
+              } as any}
+              alt="Battle face"
+            />
+            <View style={styles.capturedFaceCorners}>
+              <View style={[styles.capCorner, styles.capCornerTL]} />
+              <View style={[styles.capCorner, styles.capCornerTR]} />
+              <View style={[styles.capCorner, styles.capCornerBL]} />
+              <View style={[styles.capCorner, styles.capCornerBR]} />
+            </View>
+          </View>
+          <Text style={styles.capturedFaceLabel}>
+            {won
+              ? "\uD83C\uDFA5 \u3053\u306E\u9854\u3067\u52DD\u5229\uFF01"
+              : "\uD83C\uDFA5 \u3053\u306E\u9854\u3067\u6226\u3063\u305F\uFF01"}
+          </Text>
+        </Animated.View>
+      )}
+
+      {/* Fallback flavor text when no captured face */}
+      {(!capturedFace || Platform.OS !== "web") && (
+        <View style={styles.battleFlavorBox}>
+          <Text style={styles.battleFlavorText}>
+            {won
+              ? "\uD83C\uDFA5 \u3053\u306E\u5909\u9854\u3067\u52DD\u5229\u3092\u52DD\u3061\u53D6\u3063\u305F\uFF01"
+              : "\uD83C\uDFA5 \u3053\u306E\u5909\u9854\u3067\u6226\u3063\u305F\u304C\u53CA\u3070\u305A..."}
+          </Text>
+        </View>
+      )}
+
       <Animated.View style={[styles.rankBox, { transform: [{ scale: scaleAnim }], borderColor: RANK_COLORS[rank] }]}>
         <Text style={[styles.rankText, { color: RANK_COLORS[rank] }]}>RANK: {rank}</Text>
       </Animated.View>
@@ -144,15 +206,6 @@ export default function ResultScreen() {
       </View>
 
       <Text style={styles.coinReward}>{"\u7372\u5F97: \uD83E\uDE99 "}{coins.toLocaleString()}</Text>
-
-      {/* Battle flavor text */}
-      <View style={styles.battleFlavorBox}>
-        <Text style={styles.battleFlavorText}>
-          {won
-            ? "\uD83C\uDFA5 \u3053\u306E\u5909\u9854\u3067\u52DD\u5229\u3092\u52DD\u3061\u53D6\u3063\u305F\uFF01"
-            : "\uD83C\uDFA5 \u3053\u306E\u5909\u9854\u3067\u6226\u3063\u305F\u304C\u53CA\u3070\u305A..."}
-        </Text>
-      </View>
 
       {/* Share feedback */}
       {shareText && (
@@ -207,6 +260,47 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: "bold", color: "#fff", marginBottom: 10 },
   starsRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
   star: { fontSize: 36, fontWeight: "bold" },
+  // Captured face photo
+  capturedFaceContainer: {
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  capturedFaceFrame: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    borderWidth: 3,
+    borderColor: "#e94560",
+    overflow: "hidden",
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0f3460",
+  },
+  capturedFaceCorners: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  capCorner: {
+    position: "absolute",
+    width: 12,
+    height: 12,
+    borderColor: "#4fc3f7",
+  },
+  capCornerTL: { top: 2, left: 2, borderTopWidth: 2, borderLeftWidth: 2 },
+  capCornerTR: { top: 2, right: 2, borderTopWidth: 2, borderRightWidth: 2 },
+  capCornerBL: { bottom: 2, left: 2, borderBottomWidth: 2, borderLeftWidth: 2 },
+  capCornerBR: { bottom: 2, right: 2, borderBottomWidth: 2, borderRightWidth: 2 },
+  capturedFaceLabel: {
+    color: "#e94560",
+    fontSize: 14,
+    fontWeight: "bold",
+    marginTop: 6,
+    textAlign: "center",
+  },
   rankBox: {
     borderWidth: 3, borderRadius: 16, paddingHorizontal: 40, paddingVertical: 16,
     backgroundColor: "rgba(255,255,255,0.05)", marginBottom: 24,

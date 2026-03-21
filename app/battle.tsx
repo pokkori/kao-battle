@@ -4,11 +4,11 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { useBattle } from "../hooks/useBattle";
 import { useExpression } from "../hooks/useExpression";
 import { usePlayerData } from "../hooks/useStorage";
+import { useBattleSE } from "../hooks/useBattleSE";
+import { useWebCamera } from "../hooks/useWebCamera";
 import { getStage } from "../lib/battle/stageManager";
 import { ExpressionType } from "../types/expression";
 import { SkillType, SKILLS } from "../types/battle";
-import { useBattleSE } from "../hooks/useBattleSE";
-import { useWebCamera } from "../hooks/useWebCamera";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -34,6 +34,15 @@ const SKILL_DAMAGE: Record<SkillType, string> = {
 
 const EXPRESSION_TO_SKILL: Record<ExpressionType, SkillType> = {
   angry: "punch", happy: "barrier", surprise: "beam", sad: "heal", neutral: "idle",
+};
+
+// Guide text for each expression button
+const EXPRESSION_GUIDE: Record<ExpressionType, string> = {
+  angry: "\u773C\u3092\u3064\u308A\u4E0A\u3052\u3066\uFF01",
+  happy: "\u30CB\u30B3\u30C3\u3068\u7B11\u3063\u3066\uFF01",
+  surprise: "\u53E3\u3092\u5927\u304D\u304F\u958B\u3051\u3066\uFF01",
+  sad: "\u53E3\u89D2\u3092\u4E0B\u3052\u3066\uFF01",
+  neutral: "",
 };
 
 // Enemy display emoji based on type
@@ -68,19 +77,19 @@ export default function BattleScreen() {
   const { expression, forceExpression } = useExpression(
     state.phase === "fight" || state.phase === "boss_fight"
   );
-
-  // Battle SE (Web Audio API - web only)
   const { playSE } = useBattleSE();
 
-  // Web camera preview (web only)
-  const isFightPhase = state.phase === "fight" || state.phase === "boss_fight";
-  const { videoRef: setVideoRef, cameraReady, cameraError, captureFrame } = useWebCamera(
-    Platform.OS === "web" && isFightPhase
-  );
+  const isFighting = state.phase === "fight" || state.phase === "boss_fight";
+
+  // Web camera
+  const { videoRef: setVideoRef, cameraReady, cameraError, captureFrame } = useWebCamera(isFighting);
 
   // Tutorial state
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
+
+  // Captured face for result
+  const capturedFaceRef = useRef<string | null>(null);
 
   // Animation refs
   const flashOpacity = useRef(new Animated.Value(0)).current;
@@ -109,6 +118,9 @@ export default function BattleScreen() {
 
   // Track last enemy for enter/defeat lines
   const lastEnemyId = useRef<string | null>(null);
+
+  // Track last combo for combo SE
+  const lastCombo = useRef(0);
 
   // REC blink loop
   useEffect(() => {
@@ -150,6 +162,14 @@ export default function BattleScreen() {
     }
   }, [state.currentEnemy?.id]);
 
+  // Combo SE
+  useEffect(() => {
+    if (state.combo > lastCombo.current && state.combo >= 3) {
+      playSE("combo");
+    }
+    lastCombo.current = state.combo;
+  }, [state.combo, playSE]);
+
   // Animate HP bars
   useEffect(() => {
     const hpPct = (state.playerHP / state.playerMaxHP) * 100;
@@ -169,7 +189,7 @@ export default function BattleScreen() {
     }).start();
   }, [state.enemyHP, state.currentEnemy]);
 
-  // Handle damage effects
+  // Handle damage effects + SE
   useEffect(() => {
     if (lastDamage) {
       if (lastDamage.type === "player_attack") {
@@ -180,17 +200,11 @@ export default function BattleScreen() {
         triggerCameraOverlay("#4fc3f7");
         triggerHaptic("impact");
 
-        // Play attack SE based on skill type
-        if (lastDamage.skill === "beam") {
-          playSE("beam");
-        } else {
-          playSE("punch");
-        }
-
-        // Combo SE
-        if (lastDamage.critical) {
-          playSE("combo");
-        }
+        // Determine skill SE from current expression
+        const skill = EXPRESSION_TO_SKILL[expression.dominant];
+        if (skill === "punch") playSE("punch");
+        else if (skill === "beam") playSE("beam");
+        else playSE("punch");
 
         if (lastDamage.enemyDefeated && state.currentEnemy) {
           showSpeechBubble(lastDamage.defeatLine || "...");
@@ -208,21 +222,23 @@ export default function BattleScreen() {
         triggerCameraOverlay("#4CAF50");
         triggerHaptic("light");
         playSE("heal");
-      } else if (lastDamage.type === "barrier") {
-        triggerCameraOverlay("#4fc3f7");
-        playSE("barrier");
       }
     }
   }, [lastDamage]);
 
-  // Play win/lose SE
+  // Win/Lose SE + capture face on win
   useEffect(() => {
     if (state.phase === "win") {
       playSE("win");
+      // Capture face screenshot on victory
+      const frame = captureFrame();
+      if (frame) {
+        capturedFaceRef.current = frame;
+      }
     } else if (state.phase === "lose") {
       playSE("gameOver");
     }
-  }, [state.phase]);
+  }, [state.phase, playSE, captureFrame]);
 
   // Navigate to result when battle ends
   useEffect(() => {
@@ -251,6 +267,13 @@ export default function BattleScreen() {
           lastPlayDate: new Date().toISOString().split("T")[0],
           firstPlayDate: prev.firstPlayDate || new Date().toISOString().split("T")[0],
         }));
+
+        // Store captured face in sessionStorage for result screen (web only)
+        if (Platform.OS === "web" && capturedFaceRef.current) {
+          try {
+            sessionStorage.setItem("face-fight-capture", capturedFaceRef.current);
+          } catch {}
+        }
 
         router.replace({
           pathname: "/result",
@@ -363,6 +386,13 @@ export default function BattleScreen() {
     speechTimeout.current = setTimeout(() => setSpeechBubble(null), 2500);
   };
 
+  // Barrier SE
+  useEffect(() => {
+    if (state.barrierActive) {
+      playSE("barrier");
+    }
+  }, [state.barrierActive, playSE]);
+
   const hpPercent = (state.playerHP / state.playerMaxHP) * 100;
   const enemyHpPercent = state.currentEnemy ? (state.enemyHP / state.currentEnemy.hp) * 100 : 0;
 
@@ -380,7 +410,7 @@ export default function BattleScreen() {
   const tutorialSteps = [
     { text: "\u8868\u60C5\u3067\u6226\u304A\u3046\uFF01", sub: "\uD83D\uDE21=\u30D1\u30F3\u30C1  \uD83D\uDE0A=\u30D0\u30EA\u30A2  \uD83D\uDE32=\u30D3\u30FC\u30E0  \uD83D\uDE22=\u30D2\u30FC\u30EB" },
     { text: "\u6575\u306E\u5F31\u70B9\u8868\u60C5\u3092\u898B\u3064\u3051\u3066\u653B\u6483\uFF01", sub: "\u5F31\u70B9\u8868\u60C5\u3067\u30C0\u30E1\u30FC\u30B82\u500D\uFF01" },
-    { text: "\u30B3\u30F3\u30DC\u3092\u7E4B\u3052\u3066\u30C0\u30E1\u30FC\u30B8UP\uFF01", sub: "\u7D20\u65E9\u304F\u8868\u60C5\u3092\u5207\u308A\u66FF\u3048\u308D\uFF01" },
+    { text: "\u30AB\u30E1\u30E9\u306B\u5411\u304B\u3063\u3066\u5909\u9854\uFF01", sub: "\u30AB\u30E1\u30E9\u306B\u6620\u308B\u81EA\u5206\u306E\u9854\u3092\u898B\u306A\u304C\u3089\u6226\u304A\u3046\uFF01\n\u30DC\u30BF\u30F3\u30BF\u30C3\u30D7\u3067\u3082\u64CD\u4F5C\u3067\u304D\u307E\u3059" },
   ];
 
   const handleTutorialNext = () => {
@@ -394,8 +424,6 @@ export default function BattleScreen() {
   const getEnemyEmoji = (enemy: { id: string; isBoss: boolean }) => {
     return ENEMY_EMOJIS[enemy.id] || (enemy.isBoss ? "\uD83D\uDC79" : "\uD83D\uDC7E");
   };
-
-  const isFighting = isFightPhase;
 
   return (
     <View style={styles.container}>
@@ -619,29 +647,39 @@ export default function BattleScreen() {
         </View>
       )}
 
-      {/* Camera preview area with REC indicator and overlay */}
-      {isFightPhase && (
+      {/* Camera preview area with real camera (web) or emoji fallback */}
+      {isFighting && (
         <View style={styles.cameraPreview}>
           <View style={styles.cameraFrame}>
-            {/* Web camera feed */}
-            {Platform.OS === "web" && (
-              <video
-                ref={setVideoRef as any}
-                autoPlay
-                playsInline
-                muted
-                style={{
-                  position: "absolute",
-                  width: 88,
-                  height: 88,
-                  borderRadius: 44,
-                  objectFit: "cover",
-                  transform: "scaleX(-1)",
-                  zIndex: 0,
-                } as any}
-              />
+            {/* Web: real camera feed */}
+            {Platform.OS === "web" ? (
+              <>
+                {cameraReady ? (
+                  <video
+                    ref={(el: any) => setVideoRef(el)}
+                    autoPlay
+                    playsInline
+                    muted
+                    style={{
+                      width: 88,
+                      height: 88,
+                      borderRadius: 44,
+                      objectFit: "cover",
+                      transform: "scaleX(-1)",
+                    } as any}
+                  />
+                ) : (
+                  <>
+                    <Text style={styles.cameraEmoji}>{EXPRESSION_EMOJI[expression.dominant]}</Text>
+                    {cameraError && (
+                      <Text style={styles.cameraErrorText}>{"\uD83D\uDCF7"}</Text>
+                    )}
+                  </>
+                )}
+              </>
+            ) : (
+              <Text style={styles.cameraEmoji}>{EXPRESSION_EMOJI[expression.dominant]}</Text>
             )}
-            <Text style={[styles.cameraEmoji, Platform.OS === "web" && cameraReady && { opacity: 0.6, zIndex: 1 } as any]}>{EXPRESSION_EMOJI[expression.dominant]}</Text>
             <View style={styles.cameraOverlayCorners}>
               <View style={[styles.cameraCorner, styles.cornerTL]} />
               <View style={[styles.cameraCorner, styles.cornerTR]} />
@@ -674,7 +712,7 @@ export default function BattleScreen() {
         </View>
       )}
 
-      {/* Expression control cards - 2x2 grid with damage values and cooldown */}
+      {/* Expression control cards - 2x2 grid with guide text */}
       {isFighting && (
         <View style={styles.cardGrid}>
           {expressionButtons.map((expr) => {
@@ -708,6 +746,8 @@ export default function BattleScreen() {
                 ]}>
                   {SKILL_DAMAGE[skill]}
                 </Text>
+                {/* Face guide text */}
+                <Text style={styles.skillGuideText}>{EXPRESSION_GUIDE[expr]}</Text>
                 {isWeakness && (
                   <View style={styles.weaknessTag}>
                     <Text style={styles.weaknessTagText}>x2</Text>
@@ -880,6 +920,12 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   cameraEmoji: { fontSize: 44 },
+  cameraErrorText: {
+    position: "absolute",
+    bottom: 2,
+    fontSize: 10,
+    color: "#666",
+  },
   cameraOverlayCorners: {
     ...StyleSheet.absoluteFillObject,
   },
@@ -947,7 +993,7 @@ const styles = StyleSheet.create({
   skillCard: {
     width: (SCREEN_WIDTH - 48) / 2,
     maxWidth: 170,
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 8,
     borderRadius: 16,
     backgroundColor: "#16213e",
@@ -980,19 +1026,25 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   skillCardEmoji: {
-    fontSize: 36,
+    fontSize: 32,
   },
   skillCardName: {
     color: "#ccc",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "bold",
-    marginTop: 2,
+    marginTop: 1,
   },
   skillCardDamage: {
     color: "#e94560",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "bold",
     marginTop: 1,
+  },
+  skillGuideText: {
+    color: "#777",
+    fontSize: 10,
+    marginTop: 2,
+    textAlign: "center",
   },
   weaknessTag: {
     position: "absolute",
