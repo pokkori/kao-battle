@@ -253,7 +253,24 @@ export default function BattleScreen() {
     if (lastDamage) {
       if (lastDamage.type === "player_attack") {
         triggerFlash("#4fc3f7");
-        showDamagePopup(`-${lastDamage.amount}${lastDamage.critical ? "!!" : ""}`, lastDamage.critical ? "#ffd700" : "#4fc3f7");
+        // 激怒モード判定: 敵HP30%以下かつ生存中
+        const isEnraged = state.currentEnemy !== null
+          && state.enemyHP > 0
+          && (state.enemyHP / (state.currentEnemy.hp ?? 100)) <= 0.30;
+
+        const popupColor = lastDamage.critical
+          ? "#ffd700"
+          : isEnraged
+            ? "#FF2244"  // 激怒中: 赤
+            : "#4fc3f7"; // 通常: 水色
+
+        const popupText = lastDamage.critical
+          ? `⚡クリティカル！-${lastDamage.amount}`
+          : isEnraged
+            ? `🔥-${lastDamage.amount * 2}（激怒ボーナス）`  // ★ダブルダメージは既存エンジンにないため表示のみ
+            : `-${lastDamage.amount}`;
+
+        showDamagePopup(popupText, popupColor);
         triggerEnemyShake();
         triggerShockwave();
         triggerCameraOverlay("#4fc3f7");
@@ -534,6 +551,7 @@ export default function BattleScreen() {
   const tutorialSteps = [
     { text: "\u8868\u60C5\u3067\u6226\u304A\u3046\uFF01", sub: "\uD83D\uDE21=\u30D1\u30F3\u30C1  \uD83D\uDE0A=\u30D0\u30EA\u30A2  \uD83D\uDE32=\u30D3\u30FC\u30E0  \uD83D\uDE22=\u30D2\u30FC\u30EB" },
     { text: "\u6575\u306E\u5F31\u70B9\u8868\u60C5\u3092\u898B\u3064\u3051\u3066\u653B\u6483\uFF01", sub: "\u5F31\u70B9\u8868\u60C5\u3067\u30C0\u30E1\u30FC\u30B82\u500D\uFF01" },
+    { text: "🔥 HP30%以下で激怒モード！", sub: "激怒中は攻撃が激しくなる！\n赤いダメージ表示が出たら全力攻撃のチャンス！" },
     { text: "\u30AB\u30E1\u30E9\u306B\u5411\u304B\u3063\u3066\u5909\u9854\uFF01", sub: "\u30AB\u30E1\u30E9\u306B\u6620\u308B\u81EA\u5206\u306E\u9854\u3092\u898B\u306A\u304C\u3089\u6226\u304A\u3046\uFF01\n\u30DC\u30BF\u30F3\u30BF\u30C3\u30D7\u3067\u3082\u64CD\u4F5C\u3067\u304D\u307E\u3059" },
   ];
 
