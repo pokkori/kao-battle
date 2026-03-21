@@ -1,5 +1,6 @@
 import React, { useEffect, useCallback, useRef, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform, Dimensions } from "react-native";
+import Svg, { Circle, Rect, Path, Defs, LinearGradient, Stop } from "react-native-svg";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useBattle } from "../hooks/useBattle";
 import { useExpression } from "../hooks/useExpression";
@@ -112,6 +113,12 @@ export default function BattleScreen() {
   // Skill ring effect
   const [skillRingColor, setSkillRingColor] = useState("transparent");
   const skillRingOpacity = useRef(new Animated.Value(0)).current;
+
+  // SVG Skill effects
+  const [activeSkillEffect, setActiveSkillEffect] = useState<SkillType | null>(null);
+  const skillEffectScale = useRef(new Animated.Value(1)).current;
+  const skillEffectOpacity = useRef(new Animated.Value(0)).current;
+  const skillEffectTranslateX = useRef(new Animated.Value(0)).current;
 
   // Calibration check
   const [calibrationChecked, setCalibrationChecked] = useState(false);
@@ -240,9 +247,10 @@ export default function BattleScreen() {
         triggerCameraOverlay("#4fc3f7");
         triggerHaptic("impact");
 
-        // Skill ring effect
+        // Skill ring effect + SVG skill effect
         const skill = EXPRESSION_TO_SKILL[expression.dominant];
         triggerSkillRing(skill);
+        triggerSkillEffect(skill);
 
         if (skill === "punch") playSE("punch");
         else if (skill === "beam") playSE("beam");
@@ -268,6 +276,7 @@ export default function BattleScreen() {
         triggerHaptic("light");
         playSE("heal");
         triggerSkillRing("heal");
+        triggerSkillEffect("heal");
         captureAndStore(expression.scores[expression.dominant]);
       }
     }
@@ -426,6 +435,43 @@ export default function BattleScreen() {
     Animated.timing(skillRingOpacity, { toValue: 0, duration: 500, useNativeDriver: true }).start();
   };
 
+  const triggerSkillEffect = (skill: SkillType) => {
+    if (skill === "idle") return;
+    setActiveSkillEffect(skill);
+    if (skill === "punch") {
+      skillEffectScale.setValue(1);
+      skillEffectOpacity.setValue(1);
+      Animated.parallel([
+        Animated.timing(skillEffectScale, { toValue: 2, duration: 400, useNativeDriver: true }),
+        Animated.timing(skillEffectOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+      ]).start(() => setActiveSkillEffect(null));
+    } else if (skill === "beam") {
+      skillEffectTranslateX.setValue(0);
+      skillEffectOpacity.setValue(1);
+      Animated.parallel([
+        Animated.timing(skillEffectTranslateX, { toValue: SCREEN_WIDTH, duration: 400, useNativeDriver: true }),
+        Animated.timing(skillEffectOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+      ]).start(() => setActiveSkillEffect(null));
+    } else if (skill === "barrier") {
+      skillEffectScale.setValue(1);
+      skillEffectOpacity.setValue(0);
+      Animated.sequence([
+        Animated.timing(skillEffectOpacity, { toValue: 0.5, duration: 150, useNativeDriver: true }),
+        Animated.timing(skillEffectOpacity, { toValue: 0, duration: 350, useNativeDriver: true }),
+      ]).start(() => setActiveSkillEffect(null));
+    } else if (skill === "heal") {
+      skillEffectScale.setValue(1);
+      skillEffectOpacity.setValue(1);
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(skillEffectScale, { toValue: 1.5, duration: 250, useNativeDriver: true }),
+          Animated.timing(skillEffectScale, { toValue: 0, duration: 200, useNativeDriver: true }),
+        ]),
+        Animated.timing(skillEffectOpacity, { toValue: 0, duration: 450, useNativeDriver: true }),
+      ]).start(() => setActiveSkillEffect(null));
+    }
+  };
+
   const triggerHaptic = async (type: "impact" | "warning" | "light") => {
     if (Platform.OS === "web") return;
     try {
@@ -506,6 +552,60 @@ export default function BattleScreen() {
           },
         ]}
       />
+
+      {/* SVG Skill effect overlay */}
+      {activeSkillEffect && isFighting && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.skillEffectOverlay,
+            activeSkillEffect === "beam" && {
+              transform: [{ translateX: skillEffectTranslateX }],
+              opacity: skillEffectOpacity,
+            },
+            (activeSkillEffect === "punch" || activeSkillEffect === "heal") && {
+              transform: [{ scale: skillEffectScale }],
+              opacity: skillEffectOpacity,
+            },
+            activeSkillEffect === "barrier" && {
+              opacity: skillEffectOpacity,
+            },
+          ]}
+        >
+          <Svg
+            width={activeSkillEffect === "beam" ? 160 : activeSkillEffect === "barrier" ? 200 : 100}
+            height={activeSkillEffect === "beam" ? 24 : activeSkillEffect === "barrier" ? 200 : 100}
+          >
+            {activeSkillEffect === "punch" && (
+              <>
+                <Circle cx="50" cy="50" r="40" fill="none" stroke="#e94560" strokeWidth="4" />
+                <Path d="M50,10 L54,38 L82,40 L60,58 L68,86 L50,70 L32,86 L40,58 L18,40 L46,38 Z" fill="#e94560" opacity="0.8" />
+              </>
+            )}
+            {activeSkillEffect === "beam" && (
+              <Defs>
+                <LinearGradient id="beamGrad" x1="0" y1="0" x2="1" y2="0">
+                  <Stop offset="0" stopColor="#4fc3f7" stopOpacity="0" />
+                  <Stop offset="0.3" stopColor="#4fc3f7" stopOpacity="1" />
+                  <Stop offset="1" stopColor="#fff" stopOpacity="0.8" />
+                </LinearGradient>
+              </Defs>
+            )}
+            {activeSkillEffect === "beam" && (
+              <Rect x="0" y="4" width="160" height="16" rx="8" fill="url(#beamGrad)" />
+            )}
+            {activeSkillEffect === "barrier" && (
+              <Circle cx="100" cy="100" r="90" fill="rgba(79,195,247,0.15)" stroke="#4fc3f7" strokeWidth="3" />
+            )}
+            {activeSkillEffect === "heal" && (
+              <>
+                <Rect x="42" y="20" width="16" height="60" rx="6" fill="#fff" />
+                <Rect x="20" y="42" width="60" height="16" rx="6" fill="#fff" />
+              </>
+            )}
+          </Svg>
+        </Animated.View>
+      )}
 
       {/* Shockwave effect from bottom on player attack */}
       {isFighting && (
@@ -791,35 +891,46 @@ export default function BattleScreen() {
             <Text style={styles.faceWarning}>{"\u9854\u3092\u30AB\u30E1\u30E9\u306B\u5411\u3051\u3066\u304F\u3060\u3055\u3044"}</Text>
           )}
 
-          {/* Expression meter - 4 directional bars */}
-          <View style={styles.meterContainer}>
-            {meterExpressions.map((expr) => {
-              const val = expression.scores[expr];
-              const pct = Math.round(val * 100);
-              const threshold = 40; // 0.4 threshold line
-              return (
-                <View key={expr} style={styles.meterRow}>
-                  <Text style={[styles.meterLabel, { color: meterColors[expr] }]}>
-                    {EXPRESSION_EMOJI[expr]}
-                  </Text>
-                  <View style={styles.meterBarOuter}>
-                    <View
-                      style={[
-                        styles.meterBarInner,
-                        {
-                          width: `${Math.min(pct, 100)}%`,
-                          backgroundColor: pct >= threshold ? meterColors[expr] : `${meterColors[expr]}80`,
-                        },
-                      ]}
-                    />
-                    {/* Threshold line */}
-                    <View style={[styles.meterThreshold, { left: `${threshold}%` }]} />
-                  </View>
-                  <Text style={styles.meterValue}>{pct}%</Text>
-                </View>
-              );
-            })}
-          </View>
+          {/* Expression meter - 4 vertical bars */}
+          {(() => {
+            const dominantExpr = meterExpressions.reduce((best, expr) =>
+              expression.scores[expr] > expression.scores[best] ? expr : best,
+              meterExpressions[0]
+            );
+            return (
+              <View style={styles.meterContainer}>
+                {meterExpressions.map((expr) => {
+                  const val = expression.scores[expr];
+                  const pct = Math.round(val * 100);
+                  const isTop = expr === dominantExpr;
+                  return (
+                    <View key={expr} style={styles.meterCol}>
+                      <Text style={styles.meterPct}>{pct}</Text>
+                      <View style={[
+                        styles.meterBarOuterV,
+                        isTop && { borderColor: "gold", borderWidth: 2 },
+                      ]}>
+                        <View style={styles.meterBarBg}>
+                          <View
+                            style={[
+                              styles.meterBarFill,
+                              {
+                                height: `${Math.min(pct, 100)}%`,
+                                backgroundColor: meterColors[expr],
+                              },
+                            ]}
+                          />
+                        </View>
+                      </View>
+                      <Text style={[styles.meterLabelV, { color: meterColors[expr] }]}>
+                        {EXPRESSION_EMOJI[expr]}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            );
+          })()}
         </View>
       )}
 
@@ -1108,46 +1219,56 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginTop: 2,
   },
-  // Expression meter (4 directional bars)
+  // Expression meter (4 vertical bars)
   meterContainer: {
-    width: 220,
-    marginTop: 6,
-  },
-  meterRow: {
     flexDirection: "row",
+    gap: 6,
+    marginTop: 8,
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
+  meterCol: {
     alignItems: "center",
-    marginBottom: 3,
-    gap: 4,
+    gap: 2,
   },
-  meterLabel: {
-    fontSize: 14,
-    width: 20,
-    textAlign: "center",
-  },
-  meterBarOuter: {
-    flex: 1,
-    height: 8,
-    backgroundColor: "#333",
-    borderRadius: 4,
-    overflow: "hidden",
-    position: "relative",
-  },
-  meterBarInner: {
-    height: "100%",
-    borderRadius: 4,
-  },
-  meterThreshold: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    width: 2,
-    backgroundColor: "rgba(255,255,255,0.5)",
-  },
-  meterValue: {
+  meterPct: {
     color: "#888",
-    fontSize: 10,
-    width: 28,
-    textAlign: "right",
+    fontSize: 9,
+    fontWeight: "bold",
+  },
+  meterBarOuterV: {
+    width: 20,
+    height: 60,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#444",
+    padding: 1,
+    overflow: "hidden",
+  },
+  meterBarBg: {
+    flex: 1,
+    backgroundColor: "#222",
+    borderRadius: 3,
+    justifyContent: "flex-end",
+    overflow: "hidden",
+  },
+  meterBarFill: {
+    width: "100%",
+    borderRadius: 3,
+  },
+  meterLabelV: {
+    fontSize: 13,
+  },
+  // SVG skill effect overlay
+  skillEffectOverlay: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 18,
+    top: "40%",
+    left: "50%",
+    marginLeft: -50,
+    marginTop: -50,
   },
   // 2x2 skill card grid
   cardGrid: {
