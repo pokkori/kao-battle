@@ -5,6 +5,7 @@ import { getStage, getNextStageId } from "../lib/battle/stageManager";
 import { RankGrade } from "../types/player";
 import { generateShareCard } from "../lib/share/generateShareCard";
 import { useRanking } from "../hooks/useRanking";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const RANK_COLORS: Record<RankGrade, string> = {
   S: "#ffd700", A: "#4CAF50", B: "#2196F3", C: "#9e9e9e", D: "#795548",
@@ -41,6 +42,7 @@ export default function ResultScreen() {
   const [shareText, setShareText] = useState<string | null>(null);
   const [capturedFace, setCapturedFace] = useState<string | null>(null);
   const [shareCardUrl, setShareCardUrl] = useState<string | null>(null);
+  const [loginStreak, setLoginStreak] = useState(0);
   const scaleAnim = React.useRef(new Animated.Value(0)).current;
   const faceScaleAnim = React.useRef(new Animated.Value(0)).current;
   const starAnims = React.useRef([
@@ -55,6 +57,37 @@ export default function ResultScreen() {
       const today = new Date().toISOString().split("T")[0];
       updateRanking(stageId, score, rank, today);
     }
+  }, []);
+
+  // Daily streak tracking
+  useEffect(() => {
+    const updateStreak = async () => {
+      try {
+        const today = new Date().toISOString().split("T")[0];
+        const lastPlayDate = await AsyncStorage.getItem("@facefight/lastPlayDate");
+        const streakStr = await AsyncStorage.getItem("@facefight/loginStreak");
+        let streak = parseInt(streakStr ?? "0", 10);
+        if (lastPlayDate === null) {
+          streak = 1;
+        } else {
+          const last = new Date(lastPlayDate);
+          const now = new Date(today);
+          const diffDays = Math.round((now.getTime() - last.getTime()) / 86400000);
+          if (diffDays === 1) {
+            streak += 1;
+          } else if (diffDays > 1) {
+            streak = 1;
+          }
+          // diffDays === 0: same day, no change
+        }
+        await AsyncStorage.setItem("@facefight/lastPlayDate", today);
+        await AsyncStorage.setItem("@facefight/loginStreak", String(streak));
+        setLoginStreak(streak);
+      } catch {
+        // Silently fail
+      }
+    };
+    updateStreak();
   }, []);
 
   // Load captured face from sessionStorage (web only)
@@ -133,9 +166,10 @@ export default function ResultScreen() {
 
   const handleShare = async () => {
     const stageName = stage?.name ?? stageId;
+    const streakPrefix = loginStreak >= 3 ? `\uD83D\uDD25${loginStreak}\u65E5\u9023\u7D9A! ` : "";
     const dailyPrefix = dailyMode ? "\uD83D\uDCC5 \u30C7\u30A4\u30EA\u30FC\u6311\u6226 " : "";
     const dailyTags = dailyMode ? " #\u9854\u30D0\u30C8\u30EB\u30C7\u30A4\u30EA\u30FC #FaceFightDaily" : "";
-    const text = `${dailyPrefix}\u9854\u30D0\u30C8\u30EB ${stageName} ${won ? "\u30AF\u30EA\u30A2\uFF01" : "\u6311\u6226\u4E2D..."}\n${RANK_EMOJIS[rank]} \u30E9\u30F3\u30AF${rank} \uD83D\uDC4A\u30B9\u30B3\u30A2${score.toLocaleString()}\n\u30B3\u30F3\u30DC x${maxCombo} | \u6483\u7834 ${defeated}/${total}\n#\u9854\u30D0\u30C8\u30EB #FaceFight${dailyTags}`;
+    const text = `${streakPrefix}${dailyPrefix}\u9854\u30D0\u30C8\u30EB ${stageName} ${won ? "\u30AF\u30EA\u30A2\uFF01" : "\u6311\u6226\u4E2D..."}\n${RANK_EMOJIS[rank]} \u30E9\u30F3\u30AF${rank} \uD83D\uDC4A\u30B9\u30B3\u30A2${score.toLocaleString()}\n\u30B3\u30F3\u30DC x${maxCombo} | \u6483\u7834 ${defeated}/${total}\n#\u9854\u30D0\u30C8\u30EB #FaceFight${dailyTags}`;
 
     if (Platform.OS === "web") {
       // Try Web Share API with share card image
@@ -282,6 +316,13 @@ export default function ResultScreen() {
 
       <Text style={styles.coinReward}>{"\u7372\u5F97: \uD83E\uDE99 "}{coins.toLocaleString()}</Text>
 
+      {/* Daily streak badge */}
+      {loginStreak >= 2 && (
+        <View style={styles.streakBadge}>
+          <Text style={styles.streakText}>{"\uD83D\uDD25 "}{loginStreak}{"\u65E5\u9023\u7D9A\u30D7\u30EC\u30A4\u4E2D\uFF01"}</Text>
+        </View>
+      )}
+
       {/* Share feedback */}
       {shareText && (
         <View style={styles.shareFeedback}>
@@ -400,6 +441,16 @@ const styles = StyleSheet.create({
   statLabel: { color: "#aaa", fontSize: 16 },
   statValue: { color: "#fff", fontSize: 16, fontWeight: "bold" },
   coinReward: { color: "#ffd700", fontSize: 20, fontWeight: "bold", marginBottom: 8 },
+  streakBadge: {
+    backgroundColor: "rgba(255, 100, 0, 0.2)",
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#ff6400",
+  },
+  streakText: { color: "#ff6400", fontSize: 14, fontWeight: "bold", textAlign: "center" },
   battleFlavorBox: {
     backgroundColor: "rgba(233,69,96,0.1)",
     borderRadius: 10,

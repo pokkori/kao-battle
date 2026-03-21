@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform, Linking } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { usePlayerData } from "../hooks/useStorage";
 import { ALL_SHOP_ITEMS } from "../lib/data/shopItems";
@@ -22,6 +22,9 @@ const COIN_PACKS = [
   { id: "coin_300", label: "300\u30B3\u30A4\u30F3", coins: 300, price: "\u00A5300" },
   { id: "coin_1000", label: "1000\u30B3\u30A4\u30F3", coins: 1000, price: "\u00A5800" },
 ];
+
+const KOMOJU_URL_300 = ""; // 審査通過後に設定
+const KOMOJU_URL_1000 = ""; // 審査通過後に設定
 
 export default function ShopScreen() {
   const router = useRouter();
@@ -71,6 +74,19 @@ export default function ShopScreen() {
     }));
   };
 
+  const handleKomojuPurchase = (packId: string) => {
+    const url = packId === "coin_300" ? KOMOJU_URL_300 : packId === "coin_1000" ? KOMOJU_URL_1000 : "";
+    if (!url) {
+      Alert.alert("\u6E96\u5099\u4E2D", "\u30D0\u30C8\u30EB\u30AF\u30EA\u30A2\u3067\u30B3\u30A4\u30F3\u3092\u7372\u5F97\u3067\u304D\u307E\u3059\uFF01");
+      return;
+    }
+    if (Platform.OS === "web") {
+      window.open(url, "_blank");
+    } else {
+      Linking.openURL(url);
+    }
+  };
+
   const isOwned = (id: string) => player.purchasedItems.includes(id) || id.startsWith("default_");
   const isEquipped = (id: string) =>
     id === player.equippedPunchEffect ||
@@ -113,12 +129,7 @@ export default function ShopScreen() {
                 </View>
                 <TouchableOpacity
                   style={styles.buyBtn}
-                  onPress={() =>
-                    Alert.alert(
-                      "\u6E96\u5099\u4E2D",
-                      "\u3053\u306E\u6A5F\u80FD\u306F\u6E96\u5099\u4E2D\u3067\u3059\u3002\u30D0\u30C8\u30EB\u30AF\u30EA\u30A2\u3067\u30B3\u30A4\u30F3\u3092\u7372\u5F97\u3067\u304D\u307E\u3059\uFF01"
-                    )
-                  }
+                  onPress={() => handleKomojuPurchase(pack.id)}
                 >
                   <Text style={styles.buyBtnText}>{pack.price}</Text>
                 </TouchableOpacity>
