@@ -23,7 +23,8 @@
       "favicon": "./assets/favicon.png",
       "title": "顔バトル - 表情でたたかうリアルタイムRPG",
       "description": "カメラで自分の顔を認識。怒り・笑い・驚きの表情がスキルに変わる！無料で遊べる顔認識バトルゲーム",
-      "themeColor": "#1a1a2e"
+      "themeColor": "#1a1a2e",
+      "lang": "ja"
     },
     "plugins": [
       "expo-router",
