@@ -12,6 +12,7 @@ import { getStage } from "../lib/battle/stageManager";
 import { getCalibrated } from "../lib/face/calibration";
 import { ExpressionType } from "../types/expression";
 import { SkillType, SKILLS } from "../types/battle";
+import { setCapturedFace } from "../lib/share/captureStore";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -290,10 +291,8 @@ export default function BattleScreen() {
     if (lastDamage) {
       if (lastDamage.type === "player_attack") {
         triggerFlash("#4fc3f7");
-        // 激怒モード判定: 敵HP30%以下かつ生存中
-        const isEnraged = state.currentEnemy !== null
-          && state.enemyHP > 0
-          && (state.enemyHP / (state.currentEnemy.hp ?? 100)) <= 0.30;
+        // 激怒モード判定: useBattle.tsで確定した値を使用（ダメージ適用前のHP判定が正確）
+        const isEnraged = lastDamage.isEnraged === true;
 
         const popupColor = lastDamage.critical
           ? "#ffd700"
@@ -403,11 +402,9 @@ export default function BattleScreen() {
           firstPlayDate: prev.firstPlayDate || new Date().toISOString().split("T")[0],
         }));
 
-        // Store captured face in sessionStorage for result screen (web only)
+        // Store captured face in captureStore for result screen (web only)
         if (Platform.OS === "web" && capturedFaceRef.current) {
-          try {
-            sessionStorage.setItem("face-fight-capture", capturedFaceRef.current);
-          } catch {}
+          setCapturedFace(capturedFaceRef.current);
         }
 
         router.replace({
@@ -913,13 +910,8 @@ export default function BattleScreen() {
             />
             <Text style={styles.enemyHpValueText}>{Math.max(0, state.enemyHP)}/{state.currentEnemy.hp}</Text>
           </View>
-          {enemyHpRatio <= 0.5 && (
-            <Text style={styles.enragedBadge}>{"\uD83D\uDE21 \u6FC3\u6012\uFF01"}</Text>
-          )}
           {state.currentEnemy && (state.enemyHP / state.currentEnemy.hp) <= 0.3 && state.enemyHP > 0 && (
-            <Text style={{ color: '#FF4444', fontSize: 11, fontWeight: 'bold', textAlign: 'center', marginTop: 2 }}>
-              {'\uD83D\uDD25 \u6FC3\u6012\u30E2\u30FC\u30C9\uFF01'}
-            </Text>
+            <Text style={styles.enragedBadge}>{"\uD83D\uDE21 \u6FC3\u6012\u30E2\u30FC\u30C9\uFF01"}</Text>
           )}
           <View style={styles.weaknessRow}>
             <Text style={styles.weaknessLabel}>{"\u5F31\u70B9:"}</Text>

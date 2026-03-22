@@ -1,0 +1,30 @@
+const { createCanvas } = require('canvas');
+const fs = require('fs');
+const path = require('path');
+const W = 1200, H = 630;
+const canvas = createCanvas(W, H);
+const ctx = canvas.getContext('2d');
+// 背景
+const grad = ctx.createLinearGradient(0, 0, 0, H);
+grad.addColorStop(0, '#1a1a2e');
+grad.addColorStop(1, '#2d1b69');
+ctx.fillStyle = grad;
+ctx.fillRect(0, 0, W, H);
+// タイトル
+ctx.fillStyle = '#FF6B6B';
+ctx.font = 'bold 80px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('\uD83D\uDE21 \u9854\u30D0\u30C8\u30EB \uD83D\uDE0A', W/2, 200);
+ctx.fillStyle = '#fff';
+ctx.font = '40px sans-serif';
+ctx.fillText('\u8868\u60C5\u3067\u305F\u305F\u304B\u3046\u30EA\u30A2\u30EB\u30BF\u30A4\u30E0RPG', W/2, 290);
+ctx.fillStyle = 'rgba(255,255,255,0.6)';
+ctx.font = '30px sans-serif';
+ctx.fillText('\u600D\u308A\u9854\u3067\u30D1\u30F3\u30C1\u30FB\u7B11\u9854\u3067\u30D0\u30EA\u30A2\u30FB\u99C5\u304D\u9854\u3067\u30D3\u30FC\u30E0', W/2, 360);
+ctx.fillStyle = '#FF6B6B';
+ctx.font = 'bold 24px sans-serif';
+ctx.fillText('face-fight.vercel.app', W/2, H - 40);
+const outDir = path.join(__dirname, '..', 'public');
+if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+fs.writeFileSync(path.join(outDir, 'og-image.png'), canvas.toBuffer('image/png'));
+console.log('og-image.png generated at', path.join(outDir, 'og-image.png'));

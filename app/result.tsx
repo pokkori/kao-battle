@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform, Image } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { getCapturedFace, clearCapturedFace } from "../lib/share/captureStore";
 import { getStage, getNextStageId } from "../lib/battle/stageManager";
 import { RankGrade } from "../types/player";
 import { generateShareCard } from "../lib/share/generateShareCard";
@@ -61,7 +62,7 @@ export default function ResultScreen() {
   const [displayScore, setDisplayScore] = useState(0);
   const [shareText, setShareText] = useState<string | null>(null);
   const [todayEnragedKills, setTodayEnragedKills] = useState(0);
-  const [capturedFace, setCapturedFace] = useState<string | null>(null);
+  const [capturedFace, setCapturedFaceState] = useState<string | null>(null);
   const [shareCardUrl, setShareCardUrl] = useState<string | null>(null);
   const [loginStreak, setLoginStreak] = useState(0);
   const scaleAnim = React.useRef(new Animated.Value(0)).current;
@@ -130,16 +131,14 @@ export default function ResultScreen() {
     updateStreak();
   }, []);
 
-  // Load captured face from sessionStorage (web only)
+  // Load captured face from captureStore (web only)
   useEffect(() => {
     if (Platform.OS === "web") {
-      try {
-        const face = sessionStorage.getItem("face-fight-capture");
-        if (face) {
-          setCapturedFace(face);
-          sessionStorage.removeItem("face-fight-capture");
-        }
-      } catch {}
+      const face = getCapturedFace();
+      if (face) {
+        setCapturedFaceState(face);
+        clearCapturedFace();
+      }
     }
   }, []);
 

@@ -66,6 +66,7 @@ export interface DamageEvent {
   enemyDefeated?: boolean;
   defeatLine?: string;
   skill?: SkillType;
+  isEnraged?: boolean;
 }
 
 export function useBattle(stage: StageData | null, equippedPunch: string, equippedBeam: string, dailyConstraint?: string) {
@@ -313,6 +314,7 @@ export function useBattle(stage: StageData | null, equippedPunch: string, equipp
           enemyDefeated,
           defeatLine: enemyDefeated ? next.currentEnemy?.defeatLine : undefined,
           skill,
+          isEnraged: isEnragedNow,
         });
 
         if (enemyDefeated && isEnragedNow) {

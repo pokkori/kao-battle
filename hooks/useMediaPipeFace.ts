@@ -44,7 +44,7 @@ export function useMediaPipeFace(
         );
 
         const filesetResolver = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.15/wasm"
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.33/wasm"
         );
 
         const faceLandmarker = await FaceLandmarker.createFromOptions(
