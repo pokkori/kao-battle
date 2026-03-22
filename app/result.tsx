@@ -7,6 +7,7 @@ import { RankGrade } from "../types/player";
 import { generateShareCard } from "../lib/share/generateShareCard";
 import { useRanking } from "../hooks/useRanking";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getDailyChallenges, DailyChallenge } from "../lib/data/dailyChallenges";
 
 const DAILY_CONSTRAINT_EXPRESSIONS_RESULT = ["angry", "surprise", "sad", "happy"] as const;
 const EXPRESSION_EMOJIS_RESULT: Record<string, string> = {
@@ -65,6 +66,7 @@ export default function ResultScreen() {
   const [capturedFace, setCapturedFaceState] = useState<string | null>(null);
   const [shareCardUrl, setShareCardUrl] = useState<string | null>(null);
   const [loginStreak, setLoginStreak] = useState(0);
+  const [clearedChallenges, setClearedChallenges] = useState<DailyChallenge[]>([]);
   const scaleAnim = React.useRef(new Animated.Value(0)).current;
   const faceScaleAnim = React.useRef(new Animated.Value(0)).current;
   const starAnims = React.useRef([
@@ -129,6 +131,46 @@ export default function ResultScreen() {
       }
     };
     updateStreak();
+  }, []);
+
+  // Daily challenge completion check & coin reward
+  useEffect(() => {
+    if (!won) return;
+    const checkChallenges = async () => {
+      try {
+        const today = new Date().toISOString().split("T")[0];
+        const challenges = getDailyChallenges(today);
+        const elapsedSec = Math.floor(elapsed / 1000);
+        const cleared: DailyChallenge[] = [];
+        for (const ch of challenges) {
+          if (ch.type === "combo_min" && maxCombo >= (ch.targetValue ?? 0)) {
+            cleared.push(ch);
+          } else if (ch.type === "time_limit" && won && elapsedSec <= (ch.targetValue ?? 9999)) {
+            cleared.push(ch);
+          } else if (ch.type === "defeat_count" && defeated >= (ch.targetValue ?? 0)) {
+            cleared.push(ch);
+          }
+        }
+        if (cleared.length === 0) return;
+        // Prevent duplicate coin rewards
+        const rewardKey = `@facefight/challengeRewards/${today}`;
+        const rewardedRaw = await AsyncStorage.getItem(rewardKey);
+        const alreadyRewarded: string[] = rewardedRaw ? JSON.parse(rewardedRaw) : [];
+        const newlyCleared = cleared.filter((ch) => !alreadyRewarded.includes(ch.id));
+        if (newlyCleared.length > 0) {
+          const totalBonus = newlyCleared.reduce((sum, ch) => sum + (ch.coinReward ?? 0), 0);
+          // Store rewarded IDs
+          const updatedRewarded = [...alreadyRewarded, ...newlyCleared.map((ch) => ch.id)];
+          await AsyncStorage.setItem(rewardKey, JSON.stringify(updatedRewarded));
+          // Add coins to player data via AsyncStorage
+          const coinKey = "@facefight/coins";
+          const currentCoins = parseInt((await AsyncStorage.getItem(coinKey)) ?? "0", 10);
+          await AsyncStorage.setItem(coinKey, String(currentCoins + totalBonus));
+        }
+        setClearedChallenges(cleared);
+      } catch {}
+    };
+    checkChallenges();
   }, []);
 
   // Load captured face from captureStore (web only)
@@ -208,8 +250,8 @@ export default function ResultScreen() {
     const stageName = stage?.name ?? stageId;
     const defeatEmoji = ["😤", "😩", "😭", "🤬"][Math.floor(Math.random() * 4)];
     const text = won
-      ? `🔥 顔バトル\n${stageName} クリア！\nスコア${score.toLocaleString()} コンボ x${maxCombo}\nあなたも激怒撃破に挑戦？\n#顔バトル #FaceFight #表情ゲーム`
-      : `${defeatEmoji} 顔バトル 撃沈...\n${stageName} でやられた！\nスコア${score.toLocaleString()} コンボ x${maxCombo}\n変顔でリベンジしてみて👇\n#顔バトル #FaceFight #変顔チャレンジ`;
+      ? `🔥 顔バトル\n${stageName} クリア！\nスコア${score.toLocaleString()} コンボ x${maxCombo}\nあなたも激怒撃破に挑戦？\nhttps://face-fight.vercel.app\n#顔バトル #FaceFight #表情ゲーム`
+      : `${defeatEmoji} 顔バトル 撃沈...\n${stageName} でやられた！\nスコア${score.toLocaleString()} コンボ x${maxCombo}\n変顔でリベンジしてみて👇\nhttps://face-fight.vercel.app\n#顔バトル #FaceFight #変顔チャレンジ`;
 
     if (Platform.OS === "web") {
       // Try Web Share API with share card image
@@ -385,6 +427,30 @@ export default function ResultScreen() {
         </View>
       )}
 
+      {/* Daily challenge cleared banner */}
+      {clearedChallenges.length > 0 && (
+        <View style={{
+          backgroundColor: "rgba(100, 220, 100, 0.15)",
+          borderRadius: 12,
+          padding: 12,
+          marginBottom: 8,
+          borderWidth: 1,
+          borderColor: "#64dc64",
+          alignItems: "center",
+          width: "100%",
+          maxWidth: 300,
+        }}>
+          <Text style={{ color: "#64dc64", fontSize: 15, fontWeight: "bold" }}>
+            📅 デイリーチャレンジ クリア！
+          </Text>
+          {clearedChallenges.map((ch) => (
+            <Text key={ch.id} style={{ color: "#aaa", fontSize: 12, marginTop: 4, textAlign: "center" }}>
+              {ch.description} (+🪙{ch.coinReward})
+            </Text>
+          ))}
+        </View>
+      )}
+
       {/* Share feedback */}
       {shareText && (
         <View style={styles.shareFeedback}>
@@ -402,6 +468,23 @@ export default function ResultScreen() {
         {shareCardUrl && Platform.OS === "web" && (
           <TouchableOpacity style={styles.downloadBtn} onPress={handleDownloadCard}>
             <Text style={styles.downloadBtnText}>{"\uD83D\uDCBE \u30B7\u30A7\u30A2\u30AB\u30FC\u30C9\u4FDD\u5B58"}</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* X (Twitter) share button */}
+        {Platform.OS === "web" && (
+          <TouchableOpacity
+            style={styles.twitterBtn}
+            onPress={() => {
+              const tweetText = won
+                ? `🔥 顔バトル クリア！スコア${score.toLocaleString()} コンボ x${maxCombo}\nhttps://face-fight.vercel.app\n#顔バトル #FaceFight`
+                : `😤 顔バトル で撃沈...スコア${score.toLocaleString()}\nhttps://face-fight.vercel.app\n#顔バトル #変顔チャレンジ`;
+              if (typeof window !== "undefined") {
+                window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, "_blank");
+              }
+            }}
+          >
+            <Text style={styles.twitterBtnText}>𝕏 Xでシェア</Text>
           </TouchableOpacity>
         )}
 
@@ -570,4 +653,6 @@ const styles = StyleSheet.create({
   retryBtnText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
   backBtn: { backgroundColor: "#333", paddingVertical: 12, paddingHorizontal: 30, borderRadius: 25 },
   backBtnText: { color: "#fff", fontSize: 14 },
+  twitterBtn: { backgroundColor: "#000", paddingVertical: 10, paddingHorizontal: 24, borderRadius: 20, marginTop: 8 },
+  twitterBtnText: { color: "#fff", fontWeight: "bold", fontSize: 14 },
 });

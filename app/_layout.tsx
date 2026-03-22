@@ -18,6 +18,17 @@ export default function RootLayout() {
         <meta property="og:image:height" content="630" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:image" content="https://face-fight.vercel.app/og-image.png" />
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "WebApplication",
+          "name": "顔バトル",
+          "url": "https://face-fight.vercel.app",
+          "description": "カメラに顔を向けてリアル表情でバトル！変顔で敵を倒せ！表情認識AIゲーム。",
+          "applicationCategory": "GameApplication",
+          "operatingSystem": "Web",
+          "offers": { "@type": "Offer", "price": "0", "priceCurrency": "JPY" },
+          "inLanguage": "ja"
+        })}</script>
       </Head>
       <StatusBar style="light" />
       <Stack
