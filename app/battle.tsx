@@ -304,7 +304,7 @@ export default function BattleScreen() {
         const popupText = lastDamage.critical
           ? `⚡クリティカル！-${lastDamage.amount}`
           : isEnraged
-            ? `🔥-${lastDamage.amount}（激怒2倍！）`
+            ? `🔥-${lastDamage.amount}（激怒！）`
             : `-${lastDamage.amount}`;
 
         showDamagePopup(popupText, popupColor);
@@ -610,6 +610,7 @@ export default function BattleScreen() {
   };
 
   const getEnemyEmoji = (enemy: { id: string; isBoss: boolean }) => {
+    if (enragedMode) return "\uD83D\uDC80";
     return ENEMY_EMOJIS[enemy.id] || (enemy.isBoss ? "\uD83D\uDC79" : "\uD83D\uDC7E");
   };
 
@@ -885,6 +886,9 @@ export default function BattleScreen() {
                   fontSize: state.currentEnemy.isBoss
                     ? Math.min(120, SCREEN_WIDTH * 0.3)
                     : Math.min(90, SCREEN_WIDTH * 0.22) * state.currentEnemy.scale,
+                  textShadowColor: enragedMode ? "red" : "transparent",
+                  textShadowOffset: enragedMode ? { width: 0, height: 0 } : { width: 0, height: 0 },
+                  textShadowRadius: enragedMode ? 20 : 0,
                 },
               ]}
             >

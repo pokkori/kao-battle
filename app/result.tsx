@@ -293,8 +293,8 @@ export default function ResultScreen() {
           <img
             src={shareCardUrl}
             style={{
-              width: 300,
-              height: 157,
+              width: 180,
+              height: 320,
               borderRadius: 8,
               objectFit: "cover",
               border: "2px solid #e94560",

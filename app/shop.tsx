@@ -77,7 +77,11 @@ export default function ShopScreen() {
   const handleKomojuPurchase = (packId: string) => {
     const url = packId === "coin_300" ? KOMOJU_URL_300 : packId === "coin_1000" ? KOMOJU_URL_1000 : "";
     if (!url) {
-      Alert.alert("\u6E96\u5099\u4E2D", "\u30D0\u30C8\u30EB\u30AF\u30EA\u30A2\u3067\u30B3\u30A4\u30F3\u3092\u7372\u5F97\u3067\u304D\u307E\u3059\uFF01");
+      Alert.alert(
+        "\uD83D\uDCF1 \u30D5\u30A9\u30ED\u30FC\u3057\u3066\u306D",
+        "\u65B0\u6A5F\u80FD\u30FB\u30AD\u30E3\u30F3\u30DA\u30FC\u30F3\u60C5\u5831\u306FX\u3067\u304A\u77E5\u3089\u305B\u3057\u307E\u3059\uFF01\n@face_fight_game",
+        [{ text: "OK" }]
+      );
       return;
     }
     if (Platform.OS === "web") {
