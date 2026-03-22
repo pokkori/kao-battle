@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from "react-native";
-import Svg, { Circle, Path, Ellipse } from "react-native-svg";
+import Svg, { Circle, Path, Ellipse, Rect, Line } from "react-native-svg";
 import { useRouter } from "expo-router";
 import { usePlayerData } from "../hooks/useStorage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -104,28 +104,62 @@ export default function TitleScreen() {
 
       <View style={styles.buttonRow}>
         <TouchableOpacity style={styles.subButton} onPress={() => router.push("/shop")}>
-          <Text style={styles.subButtonText}>{"\uD83D\uDED2 \u30B7\u30E7\u30C3\u30D7"}</Text>
+          <View style={{flexDirection:'row',alignItems:'center',gap:6}}>
+            <Svg width={18} height={18} viewBox="0 0 18 18">
+              <Path d="M2,3 L4,3 L6,12 L14,12 L16,5 L5,5" stroke="#fff" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+              <Circle cx="7" cy="15" r="1.5" fill="#fff"/>
+              <Circle cx="13" cy="15" r="1.5" fill="#fff"/>
+            </Svg>
+            <Text style={styles.subButtonText}>{"\u30B7\u30E7\u30C3\u30D7"}</Text>
+          </View>
         </TouchableOpacity>
         <TouchableOpacity style={styles.subButton} onPress={() => router.push("/achievements")}>
-          <Text style={styles.subButtonText}>{"\uD83C\uDFC6 \u5B9F\u7E3E"}</Text>
+          <View style={{flexDirection:'row',alignItems:'center',gap:6}}>
+            <Svg width={18} height={18} viewBox="0 0 18 18">
+              <Path d="M5,2 L13,2 L13,10 Q13,15 9,16 Q5,15 5,10 Z" stroke="#ffd700" strokeWidth="1.5" fill="rgba(255,215,0,0.2)"/>
+              <Path d="M5,5 L2,5 L2,8 Q2,11 5,11" stroke="#ffd700" strokeWidth="1.5" fill="none"/>
+              <Path d="M13,5 L16,5 L16,8 Q16,11 13,11" stroke="#ffd700" strokeWidth="1.5" fill="none"/>
+              <Rect x="7" y="14" width="4" height="3" rx="1" fill="#ffd700"/>
+            </Svg>
+            <Text style={styles.subButtonText}>{"\u5B9F\u7E3E"}</Text>
+          </View>
         </TouchableOpacity>
       </View>
 
       <View style={styles.buttonRow}>
         <TouchableOpacity style={styles.subButton} onPress={() => router.push("/daily")}>
-          <Text style={styles.subButtonText}>{"\uD83D\uDCC5 \u30C7\u30A4\u30EA\u30FC"}</Text>
+          <View style={{flexDirection:'row',alignItems:'center',gap:6}}>
+            <Svg width={18} height={18} viewBox="0 0 18 18">
+              <Rect x="2" y="3" width="14" height="13" rx="2" stroke="#fff" strokeWidth="1.5" fill="none"/>
+              <Path d="M2,7 L16,7" stroke="#fff" strokeWidth="1"/>
+              <Rect x="6" y="1" width="2" height="4" rx="1" fill="#fff"/>
+              <Rect x="10" y="1" width="2" height="4" rx="1" fill="#fff"/>
+            </Svg>
+            <Text style={styles.subButtonText}>{"\u30C7\u30A4\u30EA\u30FC"}</Text>
+          </View>
         </TouchableOpacity>
         <TouchableOpacity style={styles.subButton} onPress={() => router.push("/settings")}>
-          <Text style={styles.subButtonText}>{"\u2699\uFE0F \u8A2D\u5B9A"}</Text>
+          <View style={{flexDirection:'row',alignItems:'center',gap:6}}>
+            <Svg width={18} height={18} viewBox="0 0 18 18">
+              <Circle cx="9" cy="9" r="3" stroke="#fff" strokeWidth="1.5" fill="none"/>
+              <Path d="M9,1 L9,4 M9,14 L9,17 M1,9 L4,9 M14,9 L17,9 M3,3 L5.1,5.1 M12.9,12.9 L15,15 M15,3 L12.9,5.1 M5.1,12.9 L3,15" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
+            </Svg>
+            <Text style={styles.subButtonText}>{"\u8A2D\u5B9A"}</Text>
+          </View>
         </TouchableOpacity>
       </View>
 
       <View style={styles.coinBar}>
-        <Text style={styles.coinText}>{"\uD83E\uDE99"} {loaded ? player.coins.toLocaleString() : "---"}</Text>
+        <View style={{flexDirection:'row',alignItems:'center',gap:4}}>
+          <Svg width={20} height={20} viewBox="0 0 20 20">
+            <Circle cx="10" cy="10" r="8" fill="#ffd700" stroke="#e0a000" strokeWidth="1.5"/>
+          </Svg>
+          <Text style={styles.coinText}>{loaded ? player.coins.toLocaleString() : "---"}</Text>
+        </View>
       </View>
       {loginStreak >= 2 && (
         <View style={styles.streakBadge}>
-          <Text style={styles.streakText}>🔥 {loginStreak}日連続プレイ中！</Text>
+          <Text style={styles.streakText}>STREAK {loginStreak}日連続！</Text>
         </View>
       )}
     </View>

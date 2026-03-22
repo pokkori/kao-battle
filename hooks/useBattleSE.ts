@@ -170,63 +170,52 @@ export function useBattleSE() {
 
   // --- BGM generators ---
 
-  // W1: 和風パーカッションループ（太鼓風）
+  // W1: 4声部和風BGM（Am-G-F-E / BPM110/140）
   const startBGM_W1_Dojo = (ctx: AudioContext, isBoss: boolean) => {
     const bpm = isBoss ? 140 : 110;
-    const beatDuration = 60 / bpm;
-    let beat = 0;
-
+    const beat16th = (60 / bpm) / 4;
+    let step = 0;
+    const melody = [440, 392, 440, 494, 523, 494, 440, 392];
+    const bass = [110, 98, 87, 82];
+    const chords = [
+      [220, 261, 330],
+      [196, 246, 294],
+      [174, 220, 261],
+      [164, 207, 247],
+    ];
     const interval = setInterval(() => {
       const t = ctx.currentTime;
-      const step = beat % 8;
-
-      // Taiko-like deep drum
-      if (step === 0 || step === 4) {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "triangle";
-        osc.frequency.setValueAtTime(80, t);
-        osc.frequency.exponentialRampToValueAtTime(40, t + 0.15);
-        gain.gain.setValueAtTime(0.2, t);
-        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(t);
-        osc.stop(t + 0.2);
+      const bar = Math.floor(step / 16) % 4;
+      const beat16 = step % 16;
+      if (beat16 === 0 || beat16 === 8) {
+        const osc = ctx.createOscillator(); const g = ctx.createGain();
+        osc.type = 'triangle'; osc.frequency.setValueAtTime(80, t); osc.frequency.exponentialRampToValueAtTime(35, t + 0.18);
+        g.gain.setValueAtTime(0.22, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.22);
+        osc.connect(g); g.connect(ctx.destination); osc.start(t); osc.stop(t + 0.22);
       }
-
-      // Hi-hat on every beat
-      const bufSize = ctx.sampleRate * 0.02;
-      const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * 0.1;
-      const noise = ctx.createBufferSource();
-      noise.buffer = buf;
-      const ng = ctx.createGain();
-      ng.gain.setValueAtTime(0.08, t);
-      ng.gain.exponentialRampToValueAtTime(0.01, t + 0.03);
-      noise.connect(ng);
-      ng.connect(ctx.destination);
-      noise.start(t);
-      noise.stop(t + 0.03);
-
-      // Bass on boss
-      if (isBoss && (step === 2 || step === 6)) {
-        const bass = ctx.createOscillator();
-        const bg = ctx.createGain();
-        bass.type = "sine";
-        bass.frequency.setValueAtTime(55, t);
-        bg.gain.setValueAtTime(0.15, t);
-        bg.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
-        bass.connect(bg);
-        bg.connect(ctx.destination);
-        bass.start(t);
-        bass.stop(t + 0.15);
+      if (beat16 % 2 === 0) {
+        const mIdx = (Math.floor(step / 2)) % melody.length;
+        const mOsc = ctx.createOscillator(); const mGain = ctx.createGain();
+        mOsc.type = 'triangle'; mOsc.frequency.setValueAtTime(melody[mIdx], t);
+        mGain.gain.setValueAtTime(0.0, t); mGain.gain.linearRampToValueAtTime(0.10, t + 0.02);
+        mGain.gain.exponentialRampToValueAtTime(0.001, t + beat16th * 1.8);
+        mOsc.connect(mGain); mGain.connect(ctx.destination); mOsc.start(t); mOsc.stop(t + beat16th * 2);
       }
-
-      beat++;
-    }, beatDuration * 1000);
-
+      if (beat16 === 0) {
+        const bOsc = ctx.createOscillator(); const bGain = ctx.createGain();
+        bOsc.type = 'sine'; bOsc.frequency.setValueAtTime(bass[bar], t);
+        bGain.gain.setValueAtTime(0.14, t); bGain.gain.exponentialRampToValueAtTime(0.02, t + beat16th * 14);
+        bOsc.connect(bGain); bGain.connect(ctx.destination); bOsc.start(t); bOsc.stop(t + beat16th * 16);
+        chords[bar].forEach(freq => {
+          const cOsc = ctx.createOscillator(); const cGain = ctx.createGain();
+          cOsc.type = 'triangle'; cOsc.frequency.setValueAtTime(freq, t);
+          cGain.gain.setValueAtTime(0.035, t); cGain.gain.linearRampToValueAtTime(0.05, t + 0.05);
+          cGain.gain.exponentialRampToValueAtTime(0.001, t + beat16th * 15);
+          cOsc.connect(cGain); cGain.connect(ctx.destination); cOsc.start(t); cOsc.stop(t + beat16th * 16);
+        });
+      }
+      step++;
+    }, beat16th * 1000);
     bgmNodesRef.current.interval = interval;
   };
 
@@ -292,43 +281,53 @@ export function useBattleSE() {
     bgmNodesRef.current.interval = interval;
   };
 
-  // W3: オルゴール風メロディループ
+  // W3: 4声部遊園地BGM（C-Am-F-G / BPM120/160）
   const startBGM_W3_Amusement = (ctx: AudioContext, isBoss: boolean) => {
-    const bpm = isBoss ? 150 : 120;
-    const beatDuration = 60 / bpm;
-    const melody = [523, 587, 659, 784, 659, 587, 523, 440]; // C5 D5 E5 G5...
-    let beat = 0;
-
+    const bpm = isBoss ? 160 : 120;
+    const beat8th = (60 / bpm) / 2;
+    let step = 0;
+    const melody = [523, 587, 659, 698, 784, 698, 659, 587, 523, 494, 440, 494, 523, 523, 494, 494];
+    const bassNotes = [130, 110, 87, 98];
+    const chords = [
+      [261, 330, 392],
+      [220, 261, 330],
+      [174, 220, 261],
+      [196, 246, 294],
+    ];
     const interval = setInterval(() => {
       const t = ctx.currentTime;
-      const note = melody[beat % melody.length];
-
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(note, t);
-      gain.gain.setValueAtTime(0.12, t);
-      gain.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(t);
-      osc.stop(t + 0.25);
-
-      // Subtle tick
-      const osc2 = ctx.createOscillator();
-      const g2 = ctx.createGain();
-      osc2.type = "sine";
-      osc2.frequency.setValueAtTime(note * 2, t);
-      g2.gain.setValueAtTime(0.04, t);
-      g2.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
-      osc2.connect(g2);
-      g2.connect(ctx.destination);
-      osc2.start(t);
-      osc2.stop(t + 0.1);
-
-      beat++;
-    }, beatDuration * 1000);
-
+      const bar = Math.floor(step / 16) % 4;
+      const beat8 = step % 16;
+      const mOsc = ctx.createOscillator(); const mGain = ctx.createGain();
+      mOsc.type = 'sine'; mOsc.frequency.setValueAtTime(melody[step % melody.length], t);
+      mGain.gain.setValueAtTime(0.0, t); mGain.gain.linearRampToValueAtTime(0.13, t + 0.015);
+      mGain.gain.exponentialRampToValueAtTime(0.001, t + beat8th * 0.9);
+      mOsc.connect(mGain); mGain.connect(ctx.destination); mOsc.start(t); mOsc.stop(t + beat8th);
+      const sparkOsc = ctx.createOscillator(); const sparkGain = ctx.createGain();
+      sparkOsc.type = 'triangle'; sparkOsc.frequency.setValueAtTime(melody[step % melody.length] * 2, t);
+      sparkGain.gain.setValueAtTime(0.03, t); sparkGain.gain.exponentialRampToValueAtTime(0.001, t + beat8th * 0.5);
+      sparkOsc.connect(sparkGain); sparkGain.connect(ctx.destination); sparkOsc.start(t); sparkOsc.stop(t + beat8th * 0.5);
+      if (beat8 === 0) {
+        const bOsc = ctx.createOscillator(); const bGain = ctx.createGain();
+        bOsc.type = 'sine'; bOsc.frequency.setValueAtTime(bassNotes[bar], t);
+        bGain.gain.setValueAtTime(0.12, t); bGain.gain.exponentialRampToValueAtTime(0.02, t + beat8th * 14);
+        bOsc.connect(bGain); bGain.connect(ctx.destination); bOsc.start(t); bOsc.stop(t + beat8th * 16);
+        chords[bar].forEach(freq => {
+          const cOsc = ctx.createOscillator(); const cGain = ctx.createGain();
+          cOsc.type = 'triangle'; cOsc.frequency.setValueAtTime(freq, t);
+          cGain.gain.setValueAtTime(0.025, t); cGain.gain.linearRampToValueAtTime(0.04, t + 0.04);
+          cGain.gain.exponentialRampToValueAtTime(0.001, t + beat8th * 7);
+          cOsc.connect(cGain); cGain.connect(ctx.destination); cOsc.start(t); cOsc.stop(t + beat8th * 8);
+        });
+      }
+      if (beat8 === 0 || beat8 === 8) {
+        const kick = ctx.createOscillator(); const kGain = ctx.createGain();
+        kick.type = 'sine'; kick.frequency.setValueAtTime(90, t); kick.frequency.exponentialRampToValueAtTime(30, t + 0.12);
+        kGain.gain.setValueAtTime(0.18, t); kGain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+        kick.connect(kGain); kGain.connect(ctx.destination); kick.start(t); kick.stop(t + 0.15);
+      }
+      step++;
+    }, beat8th * 1000);
     bgmNodesRef.current.interval = interval;
   };
 

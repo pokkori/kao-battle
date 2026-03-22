@@ -19,17 +19,41 @@ import { ExpressionFaceSVG } from "../components/battle/ExpressionFaceSVG";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-const EXPRESSION_EMOJI: Record<ExpressionType, string> = {
-  angry: "\uD83D\uDE21", happy: "\uD83D\uDE0A", surprise: "\uD83D\uDE32", sad: "\uD83D\uDE22", neutral: "\uD83D\uDE10",
-};
+function SkillIconSVG({ type, size = 28 }: { type: SkillType; size?: number }) {
+  if (type === 'punch') return (
+    <Svg width={size} height={size} viewBox="0 0 28 28">
+      <Rect x="6" y="14" width="16" height="10" rx="3" fill="#e94560"/>
+      <Rect x="8" y="8" width="4" height="10" rx="2" fill="#e94560"/>
+      <Rect x="12" y="10" width="4" height="9" rx="2" fill="#e94560"/>
+      <Rect x="16" y="11" width="4" height="8" rx="2" fill="#e94560"/>
+      <Rect x="4" y="15" width="5" height="7" rx="2" fill="#c73050"/>
+    </Svg>
+  );
+  if (type === 'barrier') return (
+    <Svg width={size} height={size} viewBox="0 0 28 28">
+      <Path d="M14,3 L24,8 L24,16 Q24,22 14,26 Q4,22 4,16 L4,8 Z" fill="none" stroke="#4fc3f7" strokeWidth="2.5"/>
+      <Path d="M14,7 L20,10.5 L20,16 Q20,19.5 14,22 Q8,19.5 8,16 L8,10.5 Z" fill="rgba(79,195,247,0.25)"/>
+    </Svg>
+  );
+  if (type === 'beam') return (
+    <Svg width={size} height={size} viewBox="0 0 28 28">
+      <Path d="M14,3 L17,12 L26,12 L19,17 L22,26 L14,21 L6,26 L9,17 L2,12 L11,12 Z" fill="#ffd700"/>
+    </Svg>
+  );
+  if (type === 'heal') return (
+    <Svg width={size} height={size} viewBox="0 0 28 28">
+      <Rect x="12" y="4" width="4" height="20" rx="2" fill="#4CAF50"/>
+      <Rect x="4" y="12" width="20" height="4" rx="2" fill="#4CAF50"/>
+    </Svg>
+  );
+  return null;
+}
+
 
 const EXPRESSION_LABELS: Record<ExpressionType, string> = {
   angry: "\u6012\u308A", happy: "\u7B11\u9854", surprise: "\u9A5A\u304D", sad: "\u60B2\u3057\u307F", neutral: "\u7121\u8868\u60C5",
 };
 
-const SKILL_ICONS: Record<SkillType, string> = {
-  punch: "\uD83D\uDC4A", barrier: "\uD83D\uDEE1\uFE0F", beam: "\u26A1", heal: "\uD83D\uDCA7", idle: "",
-};
 
 const SKILL_NAMES: Record<SkillType, string> = {
   punch: "\u30D1\u30F3\u30C1", barrier: "\u30D0\u30EA\u30A2", beam: "\u30D3\u30FC\u30E0", heal: "\u30D2\u30FC\u30EB", idle: "",
@@ -241,9 +265,9 @@ export default function BattleScreen() {
       playSE("combo");
     }
     const milestones: Record<number, string> = {
-      5:  "🔥 5コンボ！",
-      10: "⚡ 10コンボ！！",
-      20: "💥 20コンボ！！！",
+      5:  "5 COMBO!!",
+      10: "10 COMBO!!!",
+      20: "MAX COMBO!!!!",
     };
     if (milestones[state.combo] && state.combo !== lastCombo.current) {
       const text = milestones[state.combo];
@@ -294,7 +318,7 @@ export default function BattleScreen() {
       ]).start();
     }
     if (!nowEnraged) setEnragedMode(false);
-  }, [state.enemyHP, state.currentEnemy]);
+  }, [state.enemyHP, state.currentEnemy, enragedMode]);
 
   // BGM: start on fight, stop on win/lose, pause on paused
   useEffect(() => {
@@ -333,9 +357,9 @@ export default function BattleScreen() {
 
         const comboMult = getComboMultiplier(state.combo);
         const popupText = lastDamage.critical
-          ? `⚡クリティカル！-${lastDamage.amount}`
+          ? `CRITICAL! -${lastDamage.amount}`
           : isEnraged
-            ? `🔥-${lastDamage.amount}（激怒！）`
+            ? `ENRAGE! -${lastDamage.amount}`
             : state.combo >= 5
               ? `-${lastDamage.amount} x${comboMult.toFixed(1)}`
               : `-${lastDamage.amount}`;
@@ -359,9 +383,8 @@ export default function BattleScreen() {
         captureAndStore(expression.scores[expression.dominant]);
 
         // Expression feedback label
-        const feedbackEmoji = EXPRESSION_EMOJI[expression.dominant];
         const feedbackLabel = EXPRESSION_LABELS[expression.dominant];
-        setExpressionFeedbackLabel(`${feedbackEmoji} ${feedbackLabel}！`);
+        setExpressionFeedbackLabel(`${feedbackLabel}！`);
         expressionFeedbackOpacity.setValue(1);
         Animated.timing(expressionFeedbackOpacity, { toValue: 0, duration: 800, useNativeDriver: true }).start();
 
@@ -639,7 +662,7 @@ export default function BattleScreen() {
   const tutorialSteps = [
     {
       text: "表情でスキルを発動！",
-      sub: "😡 怒り = 👊パンチ（攻撃30）\n😊 笑顔 = 🛡バリア（防御）\n😲 驚き = ⚡ビーム（攻撃60）\n😢 悲しみ = 💧ヒール（回復+15）",
+      sub: "怒り = PUNCH（攻撃30）\n笑顔 = BARRIER（防御）\n驚き = BEAM（攻撃60）\n悲しみ = HEAL（回復+15）",
     },
     {
       text: "下のボタンをタップでも操作OK！",
@@ -747,23 +770,23 @@ export default function BattleScreen() {
 
       {/* Combo milestone overlay */}
       {comboMilestoneText && (
-        <Animated.Text
+        <Animated.View
           style={{
             position: "absolute",
             top: "35%",
             alignSelf: "center",
-            fontSize: 32,
-            fontWeight: "bold",
-            color: "#ffd700",
-            textShadowColor: "#ff6400",
-            textShadowRadius: 12,
             zIndex: 30,
             opacity: comboMilestoneOpacity,
             transform: [{ scale: comboMilestoneScale }],
           }}
         >
-          {comboMilestoneText}
-        </Animated.Text>
+          <View style={styles.comboMilestoneBadge}>
+            <Svg width={20} height={20} viewBox="0 0 20 20">
+              <Path d="M10,2 L12,7 L18,7 L13,11 L15,17 L10,13 L5,17 L7,11 L2,7 L8,7 Z" fill="#ffd700"/>
+            </Svg>
+            <Text style={styles.comboMilestoneText}>{comboMilestoneText}</Text>
+          </View>
+        </Animated.View>
       )}
 
       {/* Shockwave effect from bottom on player attack */}
@@ -789,9 +812,17 @@ export default function BattleScreen() {
           paddingVertical: 4,
           alignItems: "center",
         }}>
-          <Text style={{ color: "#ffd700", fontSize: 14, fontWeight: "bold" }}>
-            {`今日の縛り: ${EXPRESSION_EMOJI[dailyConstraint as keyof typeof EXPRESSION_EMOJI] ?? "❓"}のみ！`}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{ color: "#ffd700", fontSize: 14, fontWeight: "bold" }}>
+              {"今日の縛り: "}
+            </Text>
+            {dailyConstraint && (["angry","happy","surprise","sad","neutral"] as ExpressionType[]).includes(dailyConstraint as ExpressionType) ? (
+              <ExpressionFaceSVG expr={dailyConstraint as ExpressionType} size={20} active={false} />
+            ) : (
+              <Text style={{ color: "#ffd700", fontSize: 14, fontWeight: "bold" }}>{"?"}</Text>
+            )}
+            <Text style={{ color: "#ffd700", fontSize: 14, fontWeight: "bold" }}>{"のみ！"}</Text>
+          </View>
         </View>
       )}
 
@@ -826,7 +857,13 @@ export default function BattleScreen() {
         </View>
         {state.barrierActive && (
           <View style={styles.barrierIndicator}>
-            <Text style={styles.barrierText}>{"\uD83D\uDEE1\uFE0F \u30D0\u30EA\u30A2\u5C55\u958B\u4E2D"}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Svg width={14} height={14} viewBox="0 0 28 28">
+              <Path d="M14,3 L24,8 L24,16 Q24,22 14,26 Q4,22 4,16 L4,8 Z" fill="none" stroke="#4fc3f7" strokeWidth="2.5"/>
+              <Path d="M14,7 L20,10.5 L20,16 Q20,19.5 14,22 Q8,19.5 8,16 L8,10.5 Z" fill="rgba(79,195,247,0.25)"/>
+            </Svg>
+            <Text style={styles.barrierText}>{"\u30D0\u30EA\u30A2\u5C55\u958B\u4E2D"}</Text>
+          </View>
           </View>
         )}
       </View>
@@ -841,16 +878,21 @@ export default function BattleScreen() {
           }} />
         </View>
       )}
-      {/* MediaPipe loading: 下部トースト通知 */}
+      {/* MediaPipe loading: 下部バッジ通知 */}
       {isFighting && mpStatus === "loading" && (
-        <View style={{
-          position: "absolute", bottom: 120, alignSelf: "center",
-          backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 20,
-          paddingHorizontal: 16, paddingVertical: 6, zIndex: 200,
-        }}>
-          <Text style={{ color: "#4fc3f7", fontSize: 12 }}>
-            😊 顔認識を準備中... ボタンで先に操作できます
-          </Text>
+        <View style={{ position: "absolute", bottom: 120, left: 0, right: 0, alignItems: "center", zIndex: 200 }}>
+          <View style={styles.mpLoadingBadge}>
+            <Text style={styles.mpLoadingTitle}>{"顔認識AI 準備中..."}</Text>
+            <View style={styles.mpLoadingBarBg}>
+              <Animated.View
+                style={[
+                  styles.mpLoadingBarFill,
+                  { width: mpLoadingBarAnim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }
+                ]}
+              />
+            </View>
+            <Text style={styles.mpLoadingHint}>{"カメラに顔を向けてください"}</Text>
+          </View>
         </View>
       )}
 
@@ -911,7 +953,7 @@ export default function BattleScreen() {
 
       {state.phase === "win" && (
         <View style={styles.overlay}>
-          <Text style={styles.winText}>{"\uD83C\uDF89 STAGE CLEAR!"}</Text>
+          <Text style={styles.winText}>{"★ STAGE CLEAR!"}</Text>
         </View>
       )}
 
@@ -996,13 +1038,14 @@ export default function BattleScreen() {
             <Text style={styles.enemyHpValueText}>{Math.max(0, state.enemyHP)}/{state.currentEnemy.hp}</Text>
           </View>
           {state.currentEnemy && (state.enemyHP / state.currentEnemy.hp) <= 0.3 && state.enemyHP > 0 && (
-            <Text style={styles.enragedBadge}>{"\uD83D\uDE21 \u6FC3\u6012\u30E2\u30FC\u30C9\uFF01"}</Text>
+            <Text style={styles.enragedBadge}>{"ENRAGE MODE!"}</Text>
           )}
           <View style={styles.weaknessRow}>
             <Text style={styles.weaknessLabel}>{"\u5F31\u70B9:"}</Text>
-            <View style={styles.weaknessBadge}>
+            <View style={[styles.weaknessBadge, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+              <ExpressionFaceSVG expr={state.currentEnemy.weakness} size={18} active={false} />
               <Text style={styles.weaknessBadgeText}>
-                {EXPRESSION_EMOJI[state.currentEnemy.weakness]} {EXPRESSION_LABELS[state.currentEnemy.weakness]}
+                {EXPRESSION_LABELS[state.currentEnemy.weakness]}
               </Text>
             </View>
           </View>
@@ -1016,9 +1059,10 @@ export default function BattleScreen() {
 
       {/* Expression prompt */}
       {state.requestedExpression && isFighting && (
-        <View style={styles.promptBox}>
+        <View style={[styles.promptBox, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+          <ExpressionFaceSVG expr={state.requestedExpression} size={24} active={false} />
           <Text style={styles.promptText}>
-            {`${EXPRESSION_EMOJI[state.requestedExpression]} ${EXPRESSION_LABELS[state.requestedExpression]}\u3063\u3066\uFF01`}
+            {`${EXPRESSION_LABELS[state.requestedExpression]}\u3063\u3066\uFF01`}
           </Text>
         </View>
       )}
@@ -1048,7 +1092,7 @@ export default function BattleScreen() {
                     <ExpressionFaceSVG expr={expression?.dominant ?? "neutral"} size={80} active={false} />
                     {cameraError && (
                       <View style={{ alignItems: "center" }}>
-                        <Text style={styles.cameraErrorText}>📷</Text>
+                        <Text style={styles.cameraErrorText}>CAM</Text>
                         <Text style={{ color: "#e94560", fontSize: 10, textAlign: "center" }}>
                           カメラOFFでもボタンで操作可
                         </Text>
@@ -1111,9 +1155,12 @@ export default function BattleScreen() {
               <Text style={styles.recText}>REC</Text>
             </Animated.View>
           </View>
-          <Text style={styles.cameraLabel}>
-            {`${EXPRESSION_EMOJI[expression.dominant]} ${EXPRESSION_LABELS[expression.dominant]} ${Math.round(expression.scores[expression.dominant] * 100)}%`}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+            <ExpressionFaceSVG expr={expression.dominant} size={18} active={false} />
+            <Text style={styles.cameraLabel}>
+              {`${EXPRESSION_LABELS[expression.dominant]} ${Math.round(expression.scores[expression.dominant] * 100)}%`}
+            </Text>
+          </View>
 
           {/* Face not detected warning */}
           {!expression.faceDetected && mediaPipeReady && (
@@ -1130,10 +1177,10 @@ export default function BattleScreen() {
               width: "100%",
             }}>
               <Text style={{ color: "#fff", fontSize: 13, fontWeight: "bold", textAlign: "center" }}>
-                ⚠️ 顔認識が使えません
+                {"顔認識が使えません"}
               </Text>
               <Text style={{ color: "#ffe0e0", fontSize: 12, textAlign: "center", marginTop: 4 }}>
-                👆 下のボタンをタップして操作できます！
+                {"下のボタンをタップして操作できます！"}
               </Text>
               <View style={{
                 flexDirection: "row", gap: 8, marginTop: 8, flexWrap: "wrap", justifyContent: "center",
@@ -1147,7 +1194,7 @@ export default function BattleScreen() {
                       borderRadius: 16, borderWidth: 1, borderColor: "#4fc3f7",
                     }}
                   >
-                    <Text style={{ color: "#fff", fontSize: 18 }}>{EXPRESSION_EMOJI[expr]}</Text>
+                    <ExpressionFaceSVG expr={expr} size={22} active={false} />
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1185,9 +1232,7 @@ export default function BattleScreen() {
                           />
                         </View>
                       </View>
-                      <Text style={[styles.meterLabelV, { color: meterColors[expr] }]}>
-                        {EXPRESSION_EMOJI[expr]}
-                      </Text>
+                      <ExpressionFaceSVG expr={expr} size={16} active={false} />
                     </View>
                   );
                 })}
@@ -1221,9 +1266,10 @@ export default function BattleScreen() {
                 activeOpacity={0.7}
               >
                 <ExpressionFaceSVG expr={expr} size={36} active={expression?.dominant === expr} />
-                <Text style={styles.skillCardName}>
-                  {SKILL_ICONS[skill]} {SKILL_NAMES[skill]}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <SkillIconSVG type={skill} size={22} />
+                  <Text style={styles.skillCardName}>{SKILL_NAMES[skill]}</Text>
+                </View>
                 <Text style={[
                   styles.skillCardDamage,
                   skill === "heal" && { color: "#4CAF50" },
@@ -1673,5 +1719,49 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 12,
     fontWeight: "bold",
+  },
+  comboMilestoneBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  comboMilestoneText: {
+    fontSize: 32,
+    fontWeight: "bold",
+    color: "#ffd700",
+    textShadowColor: "#ff6400",
+    textShadowRadius: 12,
+  },
+  mpLoadingBarBg: {
+    width: 200,
+    height: 6,
+    backgroundColor: "#333",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  mpLoadingBarFill: {
+    height: "100%" as any,
+    backgroundColor: "#4fc3f7",
+    borderRadius: 3,
+  },
+  mpLoadingTitle: {
+    color: "#4fc3f7",
+    fontSize: 14,
+    fontWeight: "bold",
+    marginBottom: 8,
+  },
+  mpLoadingHint: {
+    color: "#aaa",
+    fontSize: 11,
+    marginTop: 6,
+  },
+  mpLoadingBadge: {
+    backgroundColor: "rgba(0,0,0,0.75)",
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#4fc3f7",
   },
 });
