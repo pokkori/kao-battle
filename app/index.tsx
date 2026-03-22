@@ -197,10 +197,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     letterSpacing: 4,
   },
-  emoji: {
-    fontSize: 64,
-    marginVertical: 20,
-  },
   mainButton: {
     backgroundColor: "#e94560",
     paddingVertical: 16,
