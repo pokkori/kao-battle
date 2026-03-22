@@ -606,9 +606,18 @@ export default function BattleScreen() {
     }
   };
 
+  const ENEMY_EMOJIS_ENRAGED: Record<string, string> = {
+    e_slime: "💢", e_wooden_dummy: "🔥", e_ninja: "⚡",
+    e_sumo: "😤", e_boss_sensei: "👹", e_fire_imp: "🌋",
+    e_lava_golem: "☄️", e_flame_dancer: "🔥", e_boss_volcano_dragon: "🐲",
+    e_clown: "🤡", e_puppet: "💀", e_mirror: "😈",
+    e_boss_ringmaster: "👿", e_alien: "👾", e_space_jellyfish: "⚡",
+    e_boss_cosmos_emperor: "💥", e_emotion_ghost: "👻", e_boss_emotion_king: "😡",
+  };
+
   const getEnemyEmoji = (enemy: { id: string; isBoss: boolean }) => {
-    if (enragedMode) return "\uD83D\uDC80";
-    return ENEMY_EMOJIS[enemy.id] || (enemy.isBoss ? "\uD83D\uDC79" : "\uD83D\uDC7E");
+    if (enragedMode) return ENEMY_EMOJIS_ENRAGED[enemy.id] || "💀";
+    return ENEMY_EMOJIS[enemy.id] || (enemy.isBoss ? "👹" : "👾");
   };
 
   // Expression meter bars (4-direction)
@@ -876,21 +885,52 @@ export default function BattleScreen() {
               { translateY: enemyBounceAnim },
             ],
           }}>
-            <Text
-              style={[
-                styles.enemyEmoji,
-                {
-                  fontSize: state.currentEnemy.isBoss
-                    ? Math.min(120, SCREEN_WIDTH * 0.3)
-                    : Math.min(90, SCREEN_WIDTH * 0.22) * state.currentEnemy.scale,
-                  textShadowColor: enragedMode ? "red" : "transparent",
-                  textShadowOffset: enragedMode ? { width: 0, height: 0 } : { width: 0, height: 0 },
-                  textShadowRadius: enragedMode ? 20 : 0,
-                },
-              ]}
-            >
-              {getEnemyEmoji(state.currentEnemy)}
-            </Text>
+            {state.currentEnemy.isBoss ? (
+              <View style={{ alignItems: "center", justifyContent: "center", width: Math.min(120, SCREEN_WIDTH * 0.3), height: Math.min(120, SCREEN_WIDTH * 0.3) }}>
+                <Svg
+                  width={Math.min(120, SCREEN_WIDTH * 0.3)}
+                  height={Math.min(120, SCREEN_WIDTH * 0.3)}
+                  style={{ position: "absolute" }}
+                >
+                  <Defs>
+                    <LinearGradient id="bossGrad" x1="0" y1="0" x2="0" y2="1">
+                      <Stop offset="0" stopColor={enragedMode ? "#FF2200" : "#9C27B0"} stopOpacity="1" />
+                      <Stop offset="1" stopColor={enragedMode ? "#880000" : "#4a0072"} stopOpacity="1" />
+                    </LinearGradient>
+                  </Defs>
+                  <Circle cx={Math.min(60, SCREEN_WIDTH * 0.15)} cy={Math.min(60, SCREEN_WIDTH * 0.15)} r={Math.min(55, SCREEN_WIDTH * 0.14)} fill="url(#bossGrad)" stroke={enragedMode ? "#FF2200" : "#ffd700"} strokeWidth="3" />
+                </Svg>
+                <Text
+                  style={[
+                    styles.enemyEmoji,
+                    {
+                      fontSize: Math.min(120, SCREEN_WIDTH * 0.3) * 0.5,
+                      textShadowColor: enragedMode ? "red" : "transparent",
+                      textShadowOffset: enragedMode ? { width: 0, height: 0 } : { width: 0, height: 0 },
+                      textShadowRadius: enragedMode ? 20 : 0,
+                    },
+                  ]}
+                >
+                  {getEnemyEmoji(state.currentEnemy)}
+                </Text>
+              </View>
+            ) : (
+              <Text
+                style={[
+                  styles.enemyEmoji,
+                  {
+                    fontSize: state.currentEnemy.isBoss
+                      ? Math.min(120, SCREEN_WIDTH * 0.3)
+                      : Math.min(90, SCREEN_WIDTH * 0.22) * state.currentEnemy.scale,
+                    textShadowColor: enragedMode ? "red" : "transparent",
+                    textShadowOffset: enragedMode ? { width: 0, height: 0 } : { width: 0, height: 0 },
+                    textShadowRadius: enragedMode ? 20 : 0,
+                  },
+                ]}
+              >
+                {getEnemyEmoji(state.currentEnemy)}
+              </Text>
+            )}
           </Animated.View>
           <Text style={[styles.enemyName, state.currentEnemy.isBoss && styles.bossName]}>
             {state.currentEnemy.isBoss ? `\u2605 ${state.currentEnemy.name} \u2605` : state.currentEnemy.name}
@@ -1033,6 +1073,23 @@ export default function BattleScreen() {
           {/* Face not detected warning */}
           {!expression.faceDetected && mediaPipeReady && (
             <Text style={styles.faceWarning}>{"\u9854\u3092\u30AB\u30E1\u30E9\u306B\u5411\u3051\u3066\u304F\u3060\u3055\u3044"}</Text>
+          )}
+          {mediaPipeError && (
+            <View style={{
+              backgroundColor: "rgba(255, 80, 80, 0.85)",
+              borderRadius: 8,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              marginTop: 4,
+              alignItems: "center",
+            }}>
+              <Text style={{ color: "#fff", fontSize: 11, fontWeight: "bold", textAlign: "center" }}>
+                ⚠️ 顔認識エラー
+              </Text>
+              <Text style={{ color: "#ffe0e0", fontSize: 10, textAlign: "center", marginTop: 2 }}>
+                ボタンタップで操作できます
+              </Text>
+            </View>
           )}
 
           {/* Expression meter - 4 vertical bars */}

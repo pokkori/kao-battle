@@ -463,6 +463,24 @@ export default function ResultScreen() {
         <TouchableOpacity style={won ? styles.shareBtn : styles.shareBtn_defeat} onPress={handleShare}>
           <Text style={styles.shareBtnText}>{won ? "📤 結果をシェア" : "😤 変顔をシェアして自慢する"}</Text>
         </TouchableOpacity>
+        {won && (
+          <TouchableOpacity
+            style={{
+              backgroundColor: "rgba(255,215,0,0.15)",
+              borderWidth: 1,
+              borderColor: "#ffd700",
+              borderRadius: 20,
+              paddingVertical: 10,
+              paddingHorizontal: 28,
+              marginTop: 8,
+            }}
+            onPress={() => router.push("/shop")}
+          >
+            <Text style={{ color: "#ffd700", fontWeight: "bold", fontSize: 14, textAlign: "center" }}>
+              🪙 コインでスキンを解放する
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {/* Download share card button */}
         {shareCardUrl && Platform.OS === "web" && (
