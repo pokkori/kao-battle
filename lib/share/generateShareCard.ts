@@ -69,7 +69,7 @@ export async function generateShareCard(options: {
     ctx.fillStyle = "#555";
     ctx.font = "80px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("\uD83D\uDE21", faceX, faceY + 30);
+    ctx.fillText("FACE", faceX, faceY + 30);
   }
 
   // === Right zone (x:430~1200, full height 630): Text vertical stack ===
@@ -121,7 +121,7 @@ export async function generateShareCard(options: {
     ctx.fillStyle = "#ff6400";
     ctx.font = "bold 22px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(`🔥 ${loginStreak}日連続プレイ中！`, badgeX, badgeY + 8);
+    ctx.fillText(`HOT! ${loginStreak}日連続プレイ中！`, badgeX, badgeY + 8);
   }
 
   // Hashtags

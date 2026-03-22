@@ -10,25 +10,22 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getDailyChallenges, DailyChallenge } from "../lib/data/dailyChallenges";
 
 const DAILY_CONSTRAINT_EXPRESSIONS_RESULT = ["angry", "surprise", "sad", "happy"] as const;
-const EXPRESSION_EMOJIS_RESULT: Record<string, string> = {
-  angry: "😡", surprise: "😲", sad: "😢", happy: "😊",
+const EXPRESSION_LABELS_RESULT: Record<string, string> = {
+  angry: "ANGRY", surprise: "SURPRISE", sad: "SAD", happy: "HAPPY",
 };
-function getNextDailyConstraintEmoji(): string {
+function getNextDailyConstraintLabel(): string {
   const now = new Date();
   const start = new Date(now.getFullYear(), 0, 0);
   const dayOfYear = Math.floor((now.getTime() - start.getTime()) / 86400000);
   const tomorrowIndex = (dayOfYear + 1) % 4;
   const expr = DAILY_CONSTRAINT_EXPRESSIONS_RESULT[tomorrowIndex];
-  return EXPRESSION_EMOJIS_RESULT[expr] ?? "❓";
+  return EXPRESSION_LABELS_RESULT[expr] ?? "?";
 }
 
 const RANK_COLORS: Record<RankGrade, string> = {
   S: "#ffd700", A: "#4CAF50", B: "#2196F3", C: "#9e9e9e", D: "#795548",
 };
 
-const RANK_EMOJIS: Record<RankGrade, string> = {
-  S: "\u2B50", A: "\uD83D\uDD25", B: "\uD83D\uDCAA", C: "\uD83D\uDC4D", D: "\uD83D\uDE24",
-};
 
 export default function ResultScreen() {
   const router = useRouter();
@@ -397,7 +394,7 @@ export default function ResultScreen() {
         />
       ))}
       <Text style={styles.title}>
-        {won ? "\uD83C\uDF89 STAGE CLEAR!" : "DEFEATED..."}
+        {won ? "★ STAGE CLEAR!" : "DEFEATED..."}
       </Text>
 
       {/* Star display */}
@@ -461,8 +458,8 @@ export default function ResultScreen() {
           </View>
           <Text style={styles.capturedFaceLabel}>
             {won
-              ? "\uD83C\uDFA5 \u3053\u306E\u9854\u3067\u52DD\u5229\uFF01"
-              : "\uD83C\uDFA5 \u3053\u306E\u9854\u3067\u6226\u3063\u305F\uFF01"}
+              ? "CAM \u3053\u306E\u9854\u3067\u52DD\u5229\uFF01"
+              : "CAM \u3053\u306E\u9854\u3067\u6226\u3063\u305F\uFF01"}
           </Text>
         </Animated.View>
       )}
@@ -472,8 +469,8 @@ export default function ResultScreen() {
         <View style={styles.battleFlavorBox}>
           <Text style={styles.battleFlavorText}>
             {won
-              ? "\uD83C\uDFA5 \u3053\u306E\u5909\u9854\u3067\u52DD\u5229\u3092\u52DD\u3061\u53D6\u3063\u305F\uFF01"
-              : "\uD83C\uDFA5 \u3053\u306E\u5909\u9854\u3067\u6226\u3063\u305F\u304C\u53CA\u3070\u305A..."}
+              ? "CAM \u3053\u306E\u5909\u9854\u3067\u52DD\u5229\u3092\u52DD\u3061\u53D6\u3063\u305F\uFF01"
+              : "CAM \u3053\u306E\u5909\u9854\u3067\u6226\u3063\u305F\u304C\u53CA\u3070\u305A..."}
           </Text>
         </View>
       )}
@@ -496,12 +493,12 @@ export default function ResultScreen() {
         </View>
       )}
 
-      <Text style={styles.coinReward}>{"\u7372\u5F97: \uD83E\uDE99 "}{coins.toLocaleString()}</Text>
+      <Text style={styles.coinReward}>{"\u7372\u5F97: COIN "}{coins.toLocaleString()}</Text>
 
       {/* Daily streak badge */}
       {loginStreak >= 2 && (
         <View style={styles.streakBadge}>
-          <Text style={styles.streakText}>{"\uD83D\uDD25 "}{loginStreak}{"\u65E5\u9023\u7D9A\u30D7\u30EC\u30A4\u4E2D\uFF01"}</Text>
+          <Text style={styles.streakText}>{"HOT! "}{loginStreak}{"\u65E5\u9023\u7D9A\u30D7\u30EC\u30A4\u4E2D\uFF01"}</Text>
         </View>
       )}
 
@@ -519,10 +516,10 @@ export default function ResultScreen() {
           maxWidth: 300,
         }}>
           <Text style={{ color: "#ffd700", fontSize: 15, fontWeight: "bold" }}>
-            🗓 デイリークリア！
+            DAILY クリア！
           </Text>
           <Text style={{ color: "#aaa", fontSize: 12, marginTop: 4, textAlign: "center" }}>
-            明日の縛り: {getNextDailyConstraintEmoji()} が使えるのみ！
+            明日の縛り: {getNextDailyConstraintLabel()} が使えるのみ！
           </Text>
         </View>
       )}
@@ -541,11 +538,11 @@ export default function ResultScreen() {
           maxWidth: 300,
         }}>
           <Text style={{ color: "#64dc64", fontSize: 15, fontWeight: "bold" }}>
-            📅 デイリーチャレンジ クリア！
+            DAILY チャレンジ クリア！
           </Text>
           {clearedChallenges.map((ch) => (
             <Text key={ch.id} style={{ color: "#aaa", fontSize: 12, marginTop: 4, textAlign: "center" }}>
-              {ch.description} (+🪙{ch.coinReward})
+              {ch.description} (+COIN {ch.coinReward})
             </Text>
           ))}
         </View>
@@ -566,12 +563,12 @@ export default function ResultScreen() {
               style={styles.revengeBtn}
               onPress={() => router.replace({ pathname: "/battle", params: { stageId } })}
             >
-              <Text style={styles.revengeBtnText}>🔥 即リベンジ！</Text>
+              <Text style={styles.revengeBtnText}>!! 即リベンジ！</Text>
             </TouchableOpacity>
             {DEFEAT_ADVICE[params.dominantSkill as keyof typeof DEFEAT_ADVICE] && (
               <View style={styles.defeatAdviceBox}>
                 <Text style={styles.defeatAdviceText}>
-                  💡 {DEFEAT_ADVICE[params.dominantSkill as keyof typeof DEFEAT_ADVICE]}
+                  TIP: {DEFEAT_ADVICE[params.dominantSkill as keyof typeof DEFEAT_ADVICE]}
                 </Text>
               </View>
             )}
@@ -580,7 +577,7 @@ export default function ResultScreen() {
 
         {/* Share button */}
         <TouchableOpacity style={won ? styles.shareBtn : styles.shareBtn_defeat} onPress={handleShare}>
-          <Text style={styles.shareBtnText}>{won ? "📤 結果をシェア" : "😤 変顔をシェアして自慢する"}</Text>
+          <Text style={styles.shareBtnText}>{won ? "SHARE 結果をシェア" : "LOL 変顔をシェアして自慢する"}</Text>
         </TouchableOpacity>
         {won && (
           <TouchableOpacity
@@ -596,7 +593,7 @@ export default function ResultScreen() {
             onPress={() => router.push("/shop")}
           >
             <Text style={{ color: "#ffd700", fontWeight: "bold", fontSize: 14, textAlign: "center" }}>
-              🪙 コインでスキンを解放する
+              COIN コインでスキンを解放する
             </Text>
           </TouchableOpacity>
         )}

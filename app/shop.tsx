@@ -7,7 +7,7 @@ import { ShopCategory } from "../types/shop";
 
 const CATEGORIES: { key: ShopCategory | "all" | "coin_pack"; label: string }[] = [
   { key: "all", label: "\u5168\u3066" },
-  { key: "coin_pack", label: "\uD83E\uDE99 \u30B3\u30A4\u30F3" },
+  { key: "coin_pack", label: "COIN \u30B3\u30A4\u30F3" },
   { key: "punch_effect", label: "\u30D1\u30F3\u30C1" },
   { key: "barrier_skin", label: "\u30D0\u30EA\u30A2" },
   { key: "beam_effect", label: "\u30D3\u30FC\u30E0" },
@@ -105,7 +105,7 @@ export default function ShopScreen() {
           <Text style={styles.backBtn}>{"\u2190 \u623B\u308B"}</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{"\u30B7\u30E7\u30C3\u30D7"}</Text>
-        <Text style={styles.coinText}>{"\uD83E\uDE99 "}{loaded ? player.coins.toLocaleString() : "---"}</Text>
+        <Text style={styles.coinText}>{"COIN "}{loaded ? player.coins.toLocaleString() : "---"}</Text>
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabBar}>
@@ -131,7 +131,7 @@ export default function ShopScreen() {
               borderWidth: 1, borderColor: "#ffd700", alignItems: "center",
             }}>
               <Text style={{ color: "#ffd700", fontSize: 13, fontWeight: "bold" }}>
-                🪙 コインパックは近日公開予定！
+                COIN コインパックは近日公開予定！
               </Text>
               <Text style={{ color: "#aaa", fontSize: 11, marginTop: 4, textAlign: "center" }}>
                 @face_fight_game をフォローして最新情報をゲット
@@ -140,7 +140,7 @@ export default function ShopScreen() {
             {COIN_PACKS.map((pack) => (
               <View key={pack.id} style={styles.coinPackCard}>
                 <View style={styles.itemInfo}>
-                  <Text style={styles.coinPackName}>{"\uD83E\uDE99 "}{pack.label}</Text>
+                  <Text style={styles.coinPackName}>{"COIN "}{pack.label}</Text>
                   <Text style={styles.itemDesc}>{pack.price}</Text>
                   <View style={{ backgroundColor: "rgba(255,152,0,0.15)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, marginTop: 4 }}>
                     <Text style={{ color: "#FF9800", fontSize: 11, fontWeight: "bold" }}>審査完了後に購入可能</Text>
@@ -178,7 +178,7 @@ export default function ShopScreen() {
                 ) : (
                   <TouchableOpacity style={styles.buyBtn} onPress={() => purchase(item.id)}>
                     <Text style={styles.buyBtnText}>
-                      {item.currency === "iap" ? (item.iapProductId ? "\u00A5---" : "\u8AB2\u91D1") : `\uD83E\uDE99 ${item.price}`}
+                      {item.currency === "iap" ? (item.iapProductId ? "\u00A5---" : "\u8AB2\u91D1") : `COIN ${item.price}`}
                     </Text>
                   </TouchableOpacity>
                 )}
