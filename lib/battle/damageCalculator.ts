@@ -2,6 +2,13 @@ import { Skill, EXPRESSION_SKILL_MAP, COMBO_MULTIPLIER, DamageResult } from "../
 import { ExpressionType } from "../../types/expression";
 import { EnemyData, EnemyAttack } from "../../types/enemy";
 
+export function getComboMultiplier(combo: number): number {
+  if (combo >= 20) return 2.0;
+  if (combo >= 10) return 1.5;
+  if (combo >= 5)  return 1.2;
+  return 1.0;
+}
+
 const EFFECT_BONUS_MAP: Record<string, number> = {
   default_punch: 1.0,
   fire_punch: 1.05,

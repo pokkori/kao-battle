@@ -1,19 +1,76 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from "react-native";
+import Svg, { Circle, Path, Ellipse } from "react-native-svg";
 import { useRouter } from "expo-router";
 import { usePlayerData } from "../hooks/useStorage";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const EXPRESSION_EMOJIS = ["\uD83D\uDE21", "\uD83D\uDE0A", "\uD83D\uDE32", "\uD83D\uDE22"];
+type FaceExpr = "angry" | "happy" | "surprise" | "sad";
+
+function FaceCharSVG({ expr }: { expr: FaceExpr }) {
+  return (
+    <Svg width={120} height={120} viewBox="0 0 120 120">
+      {/* 顔ベース */}
+      <Circle cx="60" cy="60" r="55" fill="#FFD700" stroke="#e94560" strokeWidth="3" />
+      {/* 目（surpriseの場合はサイズが違うのでexprで分岐） */}
+      {expr === "surprise" ? (
+        <>
+          <Ellipse cx="42" cy="50" rx="9" ry="11" fill="#1a1a2e" />
+          <Ellipse cx="78" cy="50" rx="9" ry="11" fill="#1a1a2e" />
+        </>
+      ) : (
+        <>
+          <Ellipse cx="42" cy="50" rx="6" ry="7" fill="#1a1a2e" />
+          <Ellipse cx="78" cy="50" rx="6" ry="7" fill="#1a1a2e" />
+        </>
+      )}
+      {/* 表情別の眉・口 */}
+      {expr === "angry" && (
+        <>
+          <Path d="M32,35 L50,40" stroke="#1a1a2e" strokeWidth="3" strokeLinecap="round"/>
+          <Path d="M70,40 L88,35" stroke="#1a1a2e" strokeWidth="3" strokeLinecap="round"/>
+          <Path d="M42,80 Q60,68 78,80" stroke="#1a1a2e" strokeWidth="3" fill="none" strokeLinecap="round"/>
+        </>
+      )}
+      {expr === "happy" && (
+        <>
+          <Path d="M32,38 L50,38" stroke="#1a1a2e" strokeWidth="2.5" strokeLinecap="round"/>
+          <Path d="M70,38 L88,38" stroke="#1a1a2e" strokeWidth="2.5" strokeLinecap="round"/>
+          <Path d="M42,72 Q60,88 78,72" stroke="#1a1a2e" strokeWidth="3" fill="none" strokeLinecap="round"/>
+        </>
+      )}
+      {expr === "surprise" && (
+        <Ellipse cx="60" cy="80" rx="10" ry="12" fill="#1a1a2e" />
+      )}
+      {expr === "sad" && (
+        <>
+          <Path d="M32,38 L50,34" stroke="#1a1a2e" strokeWidth="2.5" strokeLinecap="round"/>
+          <Path d="M70,34 L88,38" stroke="#1a1a2e" strokeWidth="2.5" strokeLinecap="round"/>
+          <Path d="M42,80 Q60,68 78,80" stroke="#1a1a2e" strokeWidth="3" fill="none" strokeLinecap="round"/>
+        </>
+      )}
+    </Svg>
+  );
+}
+
+const EXPRESSIONS: FaceExpr[] = ["angry", "happy", "surprise", "sad"];
 
 export default function TitleScreen() {
   const router = useRouter();
   const { player, loaded } = usePlayerData();
-  const [emojiIndex, setEmojiIndex] = useState(0);
+  const [exprIndex, setExprIndex] = useState(0);
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
+  const [loginStreak, setLoginStreak] = useState(0);
+
+  useEffect(() => {
+    AsyncStorage.getItem("@facefight/loginStreak").then((val) => {
+      if (val) setLoginStreak(parseInt(val, 10));
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setEmojiIndex((i) => (i + 1) % EXPRESSION_EMOJIS.length);
+      setExprIndex((i) => (i + 1) % EXPRESSIONS.length);
     }, 800);
     return () => clearInterval(interval);
   }, []);
@@ -34,9 +91,9 @@ export default function TitleScreen() {
         <Text style={styles.titleEn}>FACE FIGHT</Text>
       </View>
 
-      <Animated.Text style={[styles.emoji, { transform: [{ scale: pulseAnim }] }]}>
-        {EXPRESSION_EMOJIS[emojiIndex]}
-      </Animated.Text>
+      <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+        <FaceCharSVG expr={EXPRESSIONS[exprIndex]} />
+      </Animated.View>
 
       <TouchableOpacity
         style={styles.mainButton}
@@ -66,6 +123,11 @@ export default function TitleScreen() {
       <View style={styles.coinBar}>
         <Text style={styles.coinText}>{"\uD83E\uDE99"} {loaded ? player.coins.toLocaleString() : "---"}</Text>
       </View>
+      {loginStreak >= 2 && (
+        <View style={styles.streakBadge}>
+          <Text style={styles.streakText}>🔥 {loginStreak}日連続プレイ中！</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -150,6 +212,22 @@ const styles = StyleSheet.create({
   coinText: {
     color: "#ffd700",
     fontSize: 18,
+    fontWeight: "bold",
+  },
+  streakBadge: {
+    position: "absolute",
+    bottom: 40,
+    right: 20,
+    backgroundColor: "rgba(255, 100, 0, 0.18)",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: "#ff6400",
+  },
+  streakText: {
+    color: "#ff6400",
+    fontSize: 14,
     fontWeight: "bold",
   },
 });

@@ -44,6 +44,8 @@ export default function StageSelectScreen() {
                 {worldStages.map((stage) => {
                   const unlocked = isUnlocked(stage.id);
                   const rank = player.stageRanks[stage.id];
+                  const isRecommended = unlocked && !rank;
+                  const isCleared = unlocked && !!rank;
                   return (
                     <TouchableOpacity
                       key={stage.id}
@@ -51,6 +53,7 @@ export default function StageSelectScreen() {
                         styles.stageCard,
                         { borderColor: unlocked ? WORLD_COLORS[world] || "#555" : "#333" },
                         !unlocked && styles.locked,
+                        isRecommended && styles.stageCardRecommended,
                       ]}
                       disabled={!unlocked}
                       onPress={() => router.push({ pathname: "/battle", params: { stageId: stage.id } })}
@@ -62,9 +65,17 @@ export default function StageSelectScreen() {
                         <>
                           <Text style={styles.stageName}>{stage.name}</Text>
                           {rank && <Text style={styles.rank}>{rank}</Text>}
+                          {isCleared && !stage.bossId && (
+                            <Text style={styles.clearedCheck}>✓</Text>
+                          )}
                         </>
                       ) : (
                         <Text style={styles.lockIcon}>{"\uD83D\uDD12"}</Text>
+                      )}
+                      {isRecommended && (
+                        <View style={styles.nextBadge}>
+                          <Text style={styles.nextBadgeText}>NEXT</Text>
+                        </View>
                       )}
                     </TouchableOpacity>
                   );
@@ -104,4 +115,29 @@ const styles = StyleSheet.create({
   stageName: { color: "#aaa", fontSize: 10, marginTop: 2, textAlign: "center" },
   rank: { color: "#ffd700", fontSize: 20, fontWeight: "bold", marginTop: 2 },
   lockIcon: { fontSize: 24, marginTop: 4 },
+  stageCardRecommended: {
+    borderColor: "#ffd700",
+    borderWidth: 3,
+    backgroundColor: "rgba(255, 215, 0, 0.08)",
+  },
+  clearedCheck: {
+    color: "#4CAF50",
+    fontSize: 14,
+    fontWeight: "bold",
+    marginTop: 1,
+  },
+  nextBadge: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    backgroundColor: "#e94560",
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  nextBadgeText: {
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: "bold",
+  },
 });

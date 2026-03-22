@@ -9,10 +9,13 @@ import { useBattleSE } from "../hooks/useBattleSE";
 import { useWebCamera } from "../hooks/useWebCamera";
 import { useMediaPipeFace } from "../hooks/useMediaPipeFace";
 import { getStage } from "../lib/battle/stageManager";
+import { getComboMultiplier } from "../lib/battle/damageCalculator";
 import { getCalibrated } from "../lib/face/calibration";
 import { ExpressionType } from "../types/expression";
 import { SkillType, SKILLS } from "../types/battle";
 import { setCapturedFace } from "../lib/share/captureStore";
+import { EnemySVG } from "../components/battle/EnemySVG";
+import { ExpressionFaceSVG } from "../components/battle/ExpressionFaceSVG";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -48,16 +51,6 @@ const EXPRESSION_GUIDE: Record<ExpressionType, string> = {
   neutral: "",
 };
 
-const ENEMY_EMOJIS: Record<string, string> = {
-  e_slime: "\uD83D\uDFE2", e_wooden_dummy: "\uD83E\uDEAB", e_ninja: "\uD83E\uDD77",
-  e_sumo: "\uD83D\uDCAA", e_boss_sensei: "\uD83E\uDD4B", e_fire_imp: "\uD83D\uDD25",
-  e_lava_golem: "\uD83C\uDF0B", e_flame_dancer: "\uD83D\uDC83",
-  e_boss_volcano_dragon: "\uD83D\uDC32", e_clown: "\uD83E\uDD21",
-  e_puppet: "\uD83E\uDE86", e_mirror: "\uD83E\uDE9E",
-  e_boss_ringmaster: "\uD83C\uDFA9", e_alien: "\uD83D\uDC7D",
-  e_space_jellyfish: "\uD83E\uDEBC", e_boss_cosmos_emperor: "\uD83D\uDE80",
-  e_emotion_ghost: "\uD83D\uDC7B", e_boss_emotion_king: "\uD83D\uDC51",
-};
 
 // Skill ring colors per design
 const SKILL_RING_COLORS: Record<SkillType, string> = {
@@ -125,6 +118,7 @@ export default function BattleScreen() {
 
   // Loading bar animation
   const loadingBarAnim = useRef(new Animated.Value(0)).current;
+  const mpLoadingBarAnim = useRef(new Animated.Value(0)).current;
 
   // Calibration check
   const [calibrationChecked, setCalibrationChecked] = useState(false);
@@ -139,6 +133,9 @@ export default function BattleScreen() {
   const playerHpAnim = useRef(new Animated.Value(100)).current;
   const enemyHpAnim = useRef(new Animated.Value(100)).current;
   const enemyBounceAnim = useRef(new Animated.Value(0)).current;
+  const defeatBurstScale = useRef(new Animated.Value(0)).current;
+  const defeatBurstOpacity = useRef(new Animated.Value(0)).current;
+  const [showDefeatBurst, setShowDefeatBurst] = useState(false);
   const shockwaveScale = useRef(new Animated.Value(0)).current;
   const shockwaveOpacity = useRef(new Animated.Value(0)).current;
   const recBlink = useRef(new Animated.Value(1)).current;
@@ -159,6 +156,11 @@ export default function BattleScreen() {
 
   const lastEnemyId = useRef<string | null>(null);
   const lastCombo = useRef(0);
+
+  // Combo milestone effect
+  const [comboMilestoneText, setComboMilestoneText] = useState<string | null>(null);
+  const comboMilestoneOpacity = useRef(new Animated.Value(0)).current;
+  const comboMilestoneScale = useRef(new Animated.Value(0.5)).current;
 
   // Check calibration on mount — redirect if first time
   useEffect(() => {
@@ -182,7 +184,7 @@ export default function BattleScreen() {
     return () => loop.stop();
   }, []);
 
-  // Loading bar animation for MediaPipe
+  // Loading bar animation for MediaPipe (legacy - kept for compatibility)
   useEffect(() => {
     if (mpStatus === "loading") {
       loadingBarAnim.setValue(0);
@@ -191,6 +193,17 @@ export default function BattleScreen() {
       }).start();
     } else {
       loadingBarAnim.stopAnimation();
+    }
+  }, [mpStatus]);
+
+  // mpLoadingBarAnim for mini progress bar
+  useEffect(() => {
+    if (mpStatus === "loading") {
+      Animated.loop(
+        Animated.timing(mpLoadingBarAnim, { toValue: 1, duration: 8000, useNativeDriver: false })
+      ).start();
+    } else {
+      mpLoadingBarAnim.setValue(0);
     }
   }, [mpStatus]);
 
@@ -222,10 +235,28 @@ export default function BattleScreen() {
     }
   }, [state.currentEnemy?.id]);
 
-  // Combo SE
+  // Combo SE + milestone effect
   useEffect(() => {
     if (state.combo > lastCombo.current && state.combo >= 3) {
       playSE("combo");
+    }
+    const milestones: Record<number, string> = {
+      5:  "🔥 5コンボ！",
+      10: "⚡ 10コンボ！！",
+      20: "💥 20コンボ！！！",
+    };
+    if (milestones[state.combo] && state.combo !== lastCombo.current) {
+      const text = milestones[state.combo];
+      setComboMilestoneText(text);
+      comboMilestoneOpacity.setValue(1);
+      comboMilestoneScale.setValue(0.5);
+      Animated.parallel([
+        Animated.spring(comboMilestoneScale, { toValue: 1, tension: 80, friction: 5, useNativeDriver: true }),
+        Animated.sequence([
+          Animated.delay(1200),
+          Animated.timing(comboMilestoneOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+        ]),
+      ]).start(() => setComboMilestoneText(null));
     }
     lastCombo.current = state.combo;
   }, [state.combo, playSE]);
@@ -300,11 +331,14 @@ export default function BattleScreen() {
             ? "#FF2244"  // 激怒中: 赤
             : "#4fc3f7"; // 通常: 水色
 
+        const comboMult = getComboMultiplier(state.combo);
         const popupText = lastDamage.critical
           ? `⚡クリティカル！-${lastDamage.amount}`
           : isEnraged
             ? `🔥-${lastDamage.amount}（激怒！）`
-            : `-${lastDamage.amount}`;
+            : state.combo >= 5
+              ? `-${lastDamage.amount} x${comboMult.toFixed(1)}`
+              : `-${lastDamage.amount}`;
 
         showDamagePopup(popupText, popupColor);
         triggerEnemyShake();
@@ -334,6 +368,7 @@ export default function BattleScreen() {
         if (lastDamage.enemyDefeated && state.currentEnemy) {
           showSpeechBubble(lastDamage.defeatLine || "...");
           playSE("enemyDefeat");
+          triggerDefeatBurst();
         }
       } else if (lastDamage.type === "enemy_attack") {
         triggerFlash("#e94560");
@@ -565,6 +600,16 @@ export default function BattleScreen() {
     speechTimeout.current = setTimeout(() => setSpeechBubble(null), 2500);
   };
 
+  const triggerDefeatBurst = () => {
+    setShowDefeatBurst(true);
+    defeatBurstScale.setValue(0.3);
+    defeatBurstOpacity.setValue(1);
+    Animated.parallel([
+      Animated.timing(defeatBurstScale, { toValue: 3.5, duration: 500, useNativeDriver: true }),
+      Animated.timing(defeatBurstOpacity, { toValue: 0, duration: 500, useNativeDriver: true }),
+    ]).start(() => setShowDefeatBurst(false));
+  };
+
   // Barrier SE
   useEffect(() => {
     if (state.barrierActive) {
@@ -592,10 +637,18 @@ export default function BattleScreen() {
 
   // Tutorial content
   const tutorialSteps = [
-    { text: "\u8868\u60C5\u3067\u6226\u304A\u3046\uFF01", sub: "\uD83D\uDE21=\u30D1\u30F3\u30C1  \uD83D\uDE0A=\u30D0\u30EA\u30A2  \uD83D\uDE32=\u30D3\u30FC\u30E0  \uD83D\uDE22=\u30D2\u30FC\u30EB" },
-    { text: "\u6575\u306E\u5F31\u70B9\u8868\u60C5\u3092\u898B\u3064\u3051\u3066\u653B\u6483\uFF01", sub: "\u5F31\u70B9\u8868\u60C5\u3067\u30C0\u30E1\u30FC\u30B82\u500D\uFF01" },
-    { text: "🔥 HP30%以下で激怒モード！", sub: "激怒中は攻撃が激しくなる！\n赤いダメージ表示が出たら全力攻撃のチャンス！" },
-    { text: "\u30AB\u30E1\u30E9\u306B\u5411\u304B\u3063\u3066\u5909\u9854\uFF01", sub: "\u30AB\u30E1\u30E9\u306B\u6620\u308B\u81EA\u5206\u306E\u9854\u3092\u898B\u306A\u304C\u3089\u6226\u304A\u3046\uFF01\n\u30DC\u30BF\u30F3\u30BF\u30C3\u30D7\u3067\u3082\u64CD\u4F5C\u3067\u304D\u307E\u3059" },
+    {
+      text: "表情でスキルを発動！",
+      sub: "😡 怒り = 👊パンチ（攻撃30）\n😊 笑顔 = 🛡バリア（防御）\n😲 驚き = ⚡ビーム（攻撃60）\n😢 悲しみ = 💧ヒール（回復+15）",
+    },
+    {
+      text: "下のボタンをタップでも操作OK！",
+      sub: "カメラが使えなくても大丈夫。\n表情ボタンをタップしてスキル発動！\n弱点表情は「x2」バッジが目印",
+    },
+    {
+      text: "カメラに向かって変顔！",
+      sub: "カメラに映る自分の顔を見ながら戦おう！\nHP30%以下で敵が激怒モードに。\nその瞬間が最大ダメージチャンス！",
+    },
   ];
 
   const handleTutorialNext = () => {
@@ -606,19 +659,6 @@ export default function BattleScreen() {
     }
   };
 
-  const ENEMY_EMOJIS_ENRAGED: Record<string, string> = {
-    e_slime: "💢", e_wooden_dummy: "🔥", e_ninja: "⚡",
-    e_sumo: "😤", e_boss_sensei: "👹", e_fire_imp: "🌋",
-    e_lava_golem: "☄️", e_flame_dancer: "🔥", e_boss_volcano_dragon: "🐲",
-    e_clown: "🤡", e_puppet: "💀", e_mirror: "😈",
-    e_boss_ringmaster: "👿", e_alien: "👾", e_space_jellyfish: "⚡",
-    e_boss_cosmos_emperor: "💥", e_emotion_ghost: "👻", e_boss_emotion_king: "😡",
-  };
-
-  const getEnemyEmoji = (enemy: { id: string; isBoss: boolean }) => {
-    if (enragedMode) return ENEMY_EMOJIS_ENRAGED[enemy.id] || "💀";
-    return ENEMY_EMOJIS[enemy.id] || (enemy.isBoss ? "👹" : "👾");
-  };
 
   // Expression meter bars (4-direction)
   const meterExpressions: ExpressionType[] = ["angry", "happy", "surprise", "sad"];
@@ -705,6 +745,27 @@ export default function BattleScreen() {
         </Animated.View>
       )}
 
+      {/* Combo milestone overlay */}
+      {comboMilestoneText && (
+        <Animated.Text
+          style={{
+            position: "absolute",
+            top: "35%",
+            alignSelf: "center",
+            fontSize: 32,
+            fontWeight: "bold",
+            color: "#ffd700",
+            textShadowColor: "#ff6400",
+            textShadowRadius: 12,
+            zIndex: 30,
+            opacity: comboMilestoneOpacity,
+            transform: [{ scale: comboMilestoneScale }],
+          }}
+        >
+          {comboMilestoneText}
+        </Animated.Text>
+      )}
+
       {/* Shockwave effect from bottom on player attack */}
       {isFighting && (
         <Animated.View
@@ -770,22 +831,26 @@ export default function BattleScreen() {
         )}
       </View>
 
-      {/* MediaPipe loading overlay */}
+      {/* MediaPipe loading: 上部4pxプログレスバー */}
       {isFighting && mpStatus === "loading" && (
-        <View style={styles.mpLoadingOverlay}>
-          <Text style={styles.mpLoadingText}>😊 カメラを顔に向けてください</Text>
-          <Text style={{ color: "#aaa", fontSize: 13, textAlign: "center", marginTop: 8 }}>
-            顔認識を準備中... (初回は5〜10秒かかります)
+        <View style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, backgroundColor: "#333", zIndex: 200 }}>
+          <Animated.View style={{
+            height: 4,
+            width: mpLoadingBarAnim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }),
+            backgroundColor: "#4fc3f7",
+          }} />
+        </View>
+      )}
+      {/* MediaPipe loading: 下部トースト通知 */}
+      {isFighting && mpStatus === "loading" && (
+        <View style={{
+          position: "absolute", bottom: 120, alignSelf: "center",
+          backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 20,
+          paddingHorizontal: 16, paddingVertical: 6, zIndex: 200,
+        }}>
+          <Text style={{ color: "#4fc3f7", fontSize: 12 }}>
+            😊 顔認識を準備中... ボタンで先に操作できます
           </Text>
-          <View style={{
-            width: 200, height: 4, backgroundColor: "#333",
-            borderRadius: 2, marginTop: 16, overflow: "hidden",
-          }}>
-            <Animated.View style={{
-              height: 4, backgroundColor: "#e94560", borderRadius: 2,
-              width: loadingBarAnim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }),
-            }} />
-          </View>
         </View>
       )}
 
@@ -856,6 +921,26 @@ export default function BattleScreen() {
         </View>
       )}
 
+      {showDefeatBurst && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            alignSelf: "center",
+            top: "30%",
+            width: 80,
+            height: 80,
+            borderRadius: 40,
+            borderWidth: 4,
+            borderColor: "#ffd700",
+            backgroundColor: "rgba(255,215,0,0.15)",
+            transform: [{ scale: defeatBurstScale }],
+            opacity: defeatBurstOpacity,
+            zIndex: 25,
+          }}
+        />
+      )}
+
       {/* Enemy area */}
       {state.currentEnemy && isFighting && (
         <View style={styles.enemyArea}>
@@ -885,52 +970,12 @@ export default function BattleScreen() {
               { translateY: enemyBounceAnim },
             ],
           }}>
-            {state.currentEnemy.isBoss ? (
-              <View style={{ alignItems: "center", justifyContent: "center", width: Math.min(120, SCREEN_WIDTH * 0.3), height: Math.min(120, SCREEN_WIDTH * 0.3) }}>
-                <Svg
-                  width={Math.min(120, SCREEN_WIDTH * 0.3)}
-                  height={Math.min(120, SCREEN_WIDTH * 0.3)}
-                  style={{ position: "absolute" }}
-                >
-                  <Defs>
-                    <LinearGradient id="bossGrad" x1="0" y1="0" x2="0" y2="1">
-                      <Stop offset="0" stopColor={enragedMode ? "#FF2200" : "#9C27B0"} stopOpacity="1" />
-                      <Stop offset="1" stopColor={enragedMode ? "#880000" : "#4a0072"} stopOpacity="1" />
-                    </LinearGradient>
-                  </Defs>
-                  <Circle cx={Math.min(60, SCREEN_WIDTH * 0.15)} cy={Math.min(60, SCREEN_WIDTH * 0.15)} r={Math.min(55, SCREEN_WIDTH * 0.14)} fill="url(#bossGrad)" stroke={enragedMode ? "#FF2200" : "#ffd700"} strokeWidth="3" />
-                </Svg>
-                <Text
-                  style={[
-                    styles.enemyEmoji,
-                    {
-                      fontSize: Math.min(120, SCREEN_WIDTH * 0.3) * 0.5,
-                      textShadowColor: enragedMode ? "red" : "transparent",
-                      textShadowOffset: enragedMode ? { width: 0, height: 0 } : { width: 0, height: 0 },
-                      textShadowRadius: enragedMode ? 20 : 0,
-                    },
-                  ]}
-                >
-                  {getEnemyEmoji(state.currentEnemy)}
-                </Text>
-              </View>
-            ) : (
-              <Text
-                style={[
-                  styles.enemyEmoji,
-                  {
-                    fontSize: state.currentEnemy.isBoss
-                      ? Math.min(120, SCREEN_WIDTH * 0.3)
-                      : Math.min(90, SCREEN_WIDTH * 0.22) * state.currentEnemy.scale,
-                    textShadowColor: enragedMode ? "red" : "transparent",
-                    textShadowOffset: enragedMode ? { width: 0, height: 0 } : { width: 0, height: 0 },
-                    textShadowRadius: enragedMode ? 20 : 0,
-                  },
-                ]}
-              >
-                {getEnemyEmoji(state.currentEnemy)}
-              </Text>
-            )}
+            <EnemySVG
+              enemyId={state.currentEnemy.id}
+              isBoss={state.currentEnemy.isBoss ?? false}
+              enraged={enragedMode ?? false}
+              size={Math.min(120, 100)}
+            />
           </Animated.View>
           <Text style={[styles.enemyName, state.currentEnemy.isBoss && styles.bossName]}>
             {state.currentEnemy.isBoss ? `\u2605 ${state.currentEnemy.name} \u2605` : state.currentEnemy.name}
@@ -1000,7 +1045,7 @@ export default function BattleScreen() {
                   />
                 ) : (
                   <>
-                    <Text style={styles.cameraEmoji}>{EXPRESSION_EMOJI[expression.dominant]}</Text>
+                    <ExpressionFaceSVG expr={expression?.dominant ?? "neutral"} size={80} active={false} />
                     {cameraError && (
                       <View style={{ alignItems: "center" }}>
                         <Text style={styles.cameraErrorText}>📷</Text>
@@ -1013,7 +1058,7 @@ export default function BattleScreen() {
                 )}
               </>
             ) : (
-              <Text style={styles.cameraEmoji}>{EXPRESSION_EMOJI[expression.dominant]}</Text>
+              <ExpressionFaceSVG expr={expression?.dominant ?? "neutral"} size={80} active={false} />
             )}
             <View style={styles.cameraOverlayCorners}>
               <View style={[styles.cameraCorner, styles.cornerTL]} />
@@ -1076,19 +1121,36 @@ export default function BattleScreen() {
           )}
           {mediaPipeError && (
             <View style={{
-              backgroundColor: "rgba(255, 80, 80, 0.85)",
-              borderRadius: 8,
-              paddingHorizontal: 12,
-              paddingVertical: 6,
+              backgroundColor: "rgba(233,69,96,0.92)",
+              borderRadius: 10,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
               marginTop: 4,
               alignItems: "center",
+              width: "100%",
             }}>
-              <Text style={{ color: "#fff", fontSize: 11, fontWeight: "bold", textAlign: "center" }}>
-                ⚠️ 顔認識エラー
+              <Text style={{ color: "#fff", fontSize: 13, fontWeight: "bold", textAlign: "center" }}>
+                ⚠️ 顔認識が使えません
               </Text>
-              <Text style={{ color: "#ffe0e0", fontSize: 10, textAlign: "center", marginTop: 2 }}>
-                ボタンタップで操作できます
+              <Text style={{ color: "#ffe0e0", fontSize: 12, textAlign: "center", marginTop: 4 }}>
+                👆 下のボタンをタップして操作できます！
               </Text>
+              <View style={{
+                flexDirection: "row", gap: 8, marginTop: 8, flexWrap: "wrap", justifyContent: "center",
+              }}>
+                {(["angry","happy","surprise","sad"] as const).map((expr) => (
+                  <TouchableOpacity
+                    key={expr}
+                    onPress={() => forceExpression(expr)}
+                    style={{
+                      backgroundColor: "#0f3460", paddingHorizontal: 12, paddingVertical: 6,
+                      borderRadius: 16, borderWidth: 1, borderColor: "#4fc3f7",
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontSize: 18 }}>{EXPRESSION_EMOJI[expr]}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           )}
 
@@ -1158,7 +1220,7 @@ export default function BattleScreen() {
                 onPress={() => forceExpression(expr)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.skillCardEmoji}>{EXPRESSION_EMOJI[expr]}</Text>
+                <ExpressionFaceSVG expr={expr} size={36} active={expression?.dominant === expr} />
                 <Text style={styles.skillCardName}>
                   {SKILL_ICONS[skill]} {SKILL_NAMES[skill]}
                 </Text>

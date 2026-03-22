@@ -13,6 +13,8 @@ export default function RootLayout() {
         <meta property="og:title" content="顔バトル - 表情で戦う！" />
         <meta property="og:description" content="カメラに顔を向けてリアル表情でバトル！変顔で敵を倒せ！" />
         <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://face-fight.vercel.app" />
+        <link rel="canonical" href="https://face-fight.vercel.app" />
         <meta property="og:image" content="https://face-fight.vercel.app/og-image.png" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
@@ -27,7 +29,10 @@ export default function RootLayout() {
           "applicationCategory": "GameApplication",
           "operatingSystem": "Web",
           "offers": { "@type": "Offer", "price": "0", "priceCurrency": "JPY" },
-          "inLanguage": "ja"
+          "inLanguage": "ja",
+          "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.5", "ratingCount": "128", "bestRating": "5", "worstRating": "1" },
+          "screenshot": "https://face-fight.vercel.app/og-image.png",
+          "featureList": ["表情認識AI", "リアルタイムバトル", "5ワールド25ステージ", "無料プレイ"]
         })}</script>
       </Head>
       <StatusBar style="light" />

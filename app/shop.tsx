@@ -78,9 +78,9 @@ export default function ShopScreen() {
     const url = packId === "coin_300" ? KOMOJU_URL_300 : packId === "coin_1000" ? KOMOJU_URL_1000 : "";
     if (!url) {
       Alert.alert(
-        "\uD83D\uDCF1 \u30D5\u30A9\u30ED\u30FC\u3057\u3066\u306D",
-        "\u65B0\u6A5F\u80FD\u30FB\u30AD\u30E3\u30F3\u30DA\u30FC\u30F3\u60C5\u5831\u306FX\u3067\u304A\u77E5\u3089\u305B\u3057\u307E\u3059\uFF01\n@face_fight_game",
-        [{ text: "OK" }]
+        "審査中のためご利用いただけません",
+        "現在KOMOJU決済の審査中です。審査完了後にコイン購入が可能になります。",
+        [{ text: "了解", style: "default" }]
       );
       return;
     }
@@ -125,11 +125,26 @@ export default function ShopScreen() {
       <ScrollView contentContainerStyle={styles.itemList}>
         {selectedCategory === "coin_pack" && (
           <>
+            <View style={{
+              backgroundColor: "rgba(255,215,0,0.12)",
+              borderRadius: 10, padding: 12, marginBottom: 8,
+              borderWidth: 1, borderColor: "#ffd700", alignItems: "center",
+            }}>
+              <Text style={{ color: "#ffd700", fontSize: 13, fontWeight: "bold" }}>
+                🪙 コインパックは近日公開予定！
+              </Text>
+              <Text style={{ color: "#aaa", fontSize: 11, marginTop: 4, textAlign: "center" }}>
+                @face_fight_game をフォローして最新情報をゲット
+              </Text>
+            </View>
             {COIN_PACKS.map((pack) => (
               <View key={pack.id} style={styles.coinPackCard}>
                 <View style={styles.itemInfo}>
                   <Text style={styles.coinPackName}>{"\uD83E\uDE99 "}{pack.label}</Text>
                   <Text style={styles.itemDesc}>{pack.price}</Text>
+                  <View style={{ backgroundColor: "rgba(255,152,0,0.15)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, marginTop: 4 }}>
+                    <Text style={{ color: "#FF9800", fontSize: 11, fontWeight: "bold" }}>審査完了後に購入可能</Text>
+                  </View>
                 </View>
                 <TouchableOpacity
                   style={styles.buyBtn}

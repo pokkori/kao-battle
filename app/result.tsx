@@ -67,6 +67,7 @@ export default function ResultScreen() {
   const [shareCardUrl, setShareCardUrl] = useState<string | null>(null);
   const [loginStreak, setLoginStreak] = useState(0);
   const [clearedChallenges, setClearedChallenges] = useState<DailyChallenge[]>([]);
+  const [weeklyBest, setWeeklyBest] = useState<number>(0);
   const scaleAnim = React.useRef(new Animated.Value(0)).current;
   const faceScaleAnim = React.useRef(new Animated.Value(0)).current;
   const starAnims = React.useRef([
@@ -74,6 +75,15 @@ export default function ResultScreen() {
     new Animated.Value(0),
     new Animated.Value(0),
   ]).current;
+  const confettiAnims = React.useRef(
+    Array.from({ length: 8 }, () => ({
+      x: new Animated.Value(0),
+      y: new Animated.Value(0),
+      opacity: new Animated.Value(0),
+      rotate: new Animated.Value(0),
+    }))
+  ).current;
+  const [showConfetti, setShowConfetti] = useState(false);
 
   // Save to local ranking on clear
   useEffect(() => {
@@ -173,6 +183,22 @@ export default function ResultScreen() {
     checkChallenges();
   }, []);
 
+  // Weekly best score tracking
+  useEffect(() => {
+    (async () => {
+      const currentScore = parseInt(params?.score ?? "0", 10);
+      const WEEKLY_SCORES_KEY = "@face-fight/weekly_scores";
+      const weekKey = `${new Date().getFullYear()}-W${Math.ceil(new Date().getDate() / 7)}`;
+      const raw = await AsyncStorage.getItem(WEEKLY_SCORES_KEY);
+      const weekly: Record<string, number> = raw ? JSON.parse(raw) : {};
+      const prev = weekly[weekKey] ?? 0;
+      const newBest = Math.max(prev, currentScore);
+      weekly[weekKey] = newBest;
+      await AsyncStorage.setItem(WEEKLY_SCORES_KEY, JSON.stringify(weekly));
+      setWeeklyBest(newBest);
+    })();
+  }, []);
+
   // Load captured face from captureStore (web only)
   useEffect(() => {
     if (Platform.OS === "web") {
@@ -236,6 +262,26 @@ export default function ResultScreen() {
       }
     });
 
+    if (won && (rank === "S" || rank === "A")) {
+      setShowConfetti(true);
+      confettiAnims.forEach((anim, i) => {
+        const startX = (Math.random() - 0.5) * 200;
+        const startY = -50;
+        anim.x.setValue(startX);
+        anim.y.setValue(startY);
+        anim.opacity.setValue(1);
+        anim.rotate.setValue(0);
+        setTimeout(() => {
+          Animated.parallel([
+            Animated.timing(anim.y, { toValue: 300, duration: 1200, useNativeDriver: true }),
+            Animated.timing(anim.opacity, { toValue: 0, duration: 1200, useNativeDriver: true }),
+            Animated.timing(anim.rotate, { toValue: 360, duration: 1200, useNativeDriver: true }),
+          ]).start();
+        }, i * 80);
+      });
+      setTimeout(() => setShowConfetti(false), 2000);
+    }
+
     return () => clearInterval(interval);
   }, [score, capturedFace]);
 
@@ -246,12 +292,37 @@ export default function ResultScreen() {
     return `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
   };
 
+  const generateShareText = (params2: {
+    won: boolean;
+    score: number;
+    maxCombo: number;
+    rank: string;
+    stageId: string;
+    enragedKills?: number;
+  }) => {
+    const { won: w, score: sc, maxCombo: mc, rank: rk, stageId: sid, enragedKills = 0 } = params2;
+    const stageParts = sid?.split("_") ?? [];
+    const world = stageParts[1] ? `W${stageParts[1]}` : "";
+    const result = w ? "勝利" : "敗北";
+    const enragedText = enragedKills > 0 ? `激怒撃破${enragedKills}体 ` : "";
+    const comboText = mc >= 10 ? `${mc}コンボ達成！` : "";
+    return [
+      `[顔バトル] ${result}！ランク${rk} スコア${sc} ${world}`,
+      `${enragedText}${comboText}`,
+      `顔の表情でバトル！あなたも試して`,
+      `#顔バトル #FaceBattle`,
+    ].filter(Boolean).join("\n");
+  };
+
   const handleShare = async () => {
-    const stageName = stage?.name ?? stageId;
-    const defeatEmoji = ["😤", "😩", "😭", "🤬"][Math.floor(Math.random() * 4)];
-    const text = won
-      ? `🔥 顔バトル\n${stageName} クリア！\nスコア${score.toLocaleString()} コンボ x${maxCombo}\nあなたも激怒撃破に挑戦？\nhttps://face-fight.vercel.app\n#顔バトル #FaceFight #表情ゲーム`
-      : `${defeatEmoji} 顔バトル 撃沈...\n${stageName} でやられた！\nスコア${score.toLocaleString()} コンボ x${maxCombo}\n変顔でリベンジしてみて👇\nhttps://face-fight.vercel.app\n#顔バトル #FaceFight #変顔チャレンジ`;
+    const text = generateShareText({
+      won,
+      score,
+      maxCombo,
+      rank,
+      stageId,
+      enragedKills: parseInt(String(params.enragedKills ?? "0"), 10),
+    });
 
     if (Platform.OS === "web") {
       // Try Web Share API with share card image
@@ -303,6 +374,28 @@ export default function ResultScreen() {
 
   return (
     <View style={styles.container}>
+      {showConfetti && confettiAnims.map((anim, i) => (
+        <Animated.View
+          key={i}
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: "30%",
+            left: "50%",
+            width: 10,
+            height: 10,
+            borderRadius: 2,
+            backgroundColor: ["#ffd700", "#e94560", "#4fc3f7", "#4CAF50", "#ff6400"][i % 5],
+            transform: [
+              { translateX: anim.x },
+              { translateY: anim.y },
+              { rotate: anim.rotate.interpolate({ inputRange: [0, 360], outputRange: ["0deg", "360deg"] }) },
+            ],
+            opacity: anim.opacity,
+            zIndex: 100,
+          }}
+        />
+      ))}
       <Text style={styles.title}>
         {won ? "\uD83C\uDF89 STAGE CLEAR!" : "DEFEATED..."}
       </Text>
@@ -334,8 +427,8 @@ export default function ResultScreen() {
           <img
             src={shareCardUrl}
             style={{
-              width: 180,
-              height: 320,
+              width: 300,
+              height: 158,
               borderRadius: 8,
               objectFit: "cover",
               border: "2px solid #e94560",
@@ -395,6 +488,13 @@ export default function ResultScreen() {
         <StatRow label={"\u6483\u7834\u6570"} value={`${defeated}/${total}`} />
         <StatRow label={"\u30AF\u30EA\u30A2\u6642\u9593"} value={formatTime(elapsed)} />
       </View>
+      {weeklyBest > 0 && (
+        <View style={{ marginTop: 8, padding: 10, backgroundColor: "rgba(255,215,0,0.1)", borderRadius: 10, borderWidth: 1, borderColor: "rgba(255,215,0,0.3)" }}>
+          <Text style={{ color: "#ffd700", fontSize: 13, textAlign: "center" }}>
+            今週のベスト: {weeklyBest.toLocaleString()}
+          </Text>
+        </View>
+      )}
 
       <Text style={styles.coinReward}>{"\u7372\u5F97: \uD83E\uDE99 "}{coins.toLocaleString()}</Text>
 
@@ -459,6 +559,25 @@ export default function ResultScreen() {
       )}
 
       <View style={styles.buttons}>
+        {/* 敗北時: リベンジボタンを最上部に */}
+        {!won && (
+          <>
+            <TouchableOpacity
+              style={styles.revengeBtn}
+              onPress={() => router.replace({ pathname: "/battle", params: { stageId } })}
+            >
+              <Text style={styles.revengeBtnText}>🔥 即リベンジ！</Text>
+            </TouchableOpacity>
+            {DEFEAT_ADVICE[params.dominantSkill as keyof typeof DEFEAT_ADVICE] && (
+              <View style={styles.defeatAdviceBox}>
+                <Text style={styles.defeatAdviceText}>
+                  💡 {DEFEAT_ADVICE[params.dominantSkill as keyof typeof DEFEAT_ADVICE]}
+                </Text>
+              </View>
+            )}
+          </>
+        )}
+
         {/* Share button */}
         <TouchableOpacity style={won ? styles.shareBtn : styles.shareBtn_defeat} onPress={handleShare}>
           <Text style={styles.shareBtnText}>{won ? "📤 結果をシェア" : "😤 変顔をシェアして自慢する"}</Text>
@@ -495,8 +614,8 @@ export default function ResultScreen() {
             style={styles.twitterBtn}
             onPress={() => {
               const tweetText = won
-                ? `🔥 顔バトル クリア！スコア${score.toLocaleString()} コンボ x${maxCombo}\nhttps://face-fight.vercel.app\n#顔バトル #FaceFight`
-                : `😤 顔バトル で撃沈...スコア${score.toLocaleString()}\nhttps://face-fight.vercel.app\n#顔バトル #変顔チャレンジ`;
+                ? `🔥【顔バトル】クリア！スコア${score.toLocaleString()} コンボ x${maxCombo}\nhttps://face-fight.vercel.app\n#顔バトル #変顔チャレンジ #表情認識AI #FaceFight`
+                : `😤【顔バトル】で撃沈...スコア${score.toLocaleString()}\nhttps://face-fight.vercel.app\n#顔バトル #変顔チャレンジ #表情認識AI`;
               if (typeof window !== "undefined") {
                 window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, "_blank");
               }
@@ -515,20 +634,7 @@ export default function ResultScreen() {
           </TouchableOpacity>
         )}
 
-        {!won && DEFEAT_ADVICE[params.dominantSkill] && (
-          <Text style={{ fontSize: 14, color: "#AAAAAA", textAlign: "center", marginTop: 8 }}>
-            💡 {DEFEAT_ADVICE[params.dominantSkill]}
-          </Text>
-        )}
-
-        {!won && (
-          <TouchableOpacity
-            style={styles.retryBtn}
-            onPress={() => router.replace({ pathname: "/battle", params: { stageId } })}
-          >
-            <Text style={styles.retryBtnText}>{"\uD83D\uDD04 \u30EA\u30C8\u30E9\u30A4"}</Text>
-          </TouchableOpacity>
-        )}
+        {/* 旧 retryBtn は revengeBtn に統合済みのため削除 */}
 
         <TouchableOpacity style={styles.backBtn} onPress={() => router.replace("/stage-select")}>
           <Text style={styles.backBtnText}>{"\u30B9\u30C6\u30FC\u30B8\u9078\u629E\u306B\u623B\u308B"}</Text>
@@ -673,4 +779,37 @@ const styles = StyleSheet.create({
   backBtnText: { color: "#fff", fontSize: 14 },
   twitterBtn: { backgroundColor: "#000", paddingVertical: 10, paddingHorizontal: 24, borderRadius: 20, marginTop: 8 },
   twitterBtnText: { color: "#fff", fontWeight: "bold", fontSize: 14 },
+  revengeBtn: {
+    backgroundColor: "#e94560",
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: "#ff6b8a",
+    elevation: 6,
+    shadowColor: "#e94560",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+  },
+  revengeBtnText: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "bold",
+    textAlign: "center",
+  },
+  defeatAdviceBox: {
+    backgroundColor: "rgba(255,165,0,0.12)",
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,165,0,0.4)",
+    maxWidth: 300,
+  },
+  defeatAdviceText: {
+    color: "#FFA500",
+    fontSize: 14,
+    textAlign: "center",
+  },
 });
