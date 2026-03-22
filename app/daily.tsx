@@ -65,7 +65,7 @@ export default function DailyScreen() {
             const done = streak > i || (streak === i + 1 && isCompletedToday);
             const isToday = streak % 7 === i && !isCompletedToday;
             return (
-              <View key={i} style={[styles.loginDay, done && styles.loginDone, isToday && styles.loginToday]}>
+              <View key={i} style={[styles.loginDay, done && styles.loginDone, isToday && styles.loginToday, i === 6 && styles.loginDaySpecial]}>
                 <Text style={styles.loginDayNum}>{i + 1}</Text>
                 <Text style={styles.loginDayReward}>{"\uD83E\uDE99"}{bonus}</Text>
                 {done && <Text style={styles.checkMark}>{"\u2713"}</Text>}
@@ -123,6 +123,11 @@ const styles = StyleSheet.create({
   },
   loginDone: { borderColor: "#4CAF50", backgroundColor: "rgba(76,175,80,0.1)" },
   loginToday: { borderColor: "#ffd700", backgroundColor: "rgba(255,215,0,0.1)" },
+  loginDaySpecial: {
+    borderColor: "#ffd700",
+    backgroundColor: "rgba(255,215,0,0.2)",
+    borderWidth: 2,
+  },
   loginDayNum: { color: "#fff", fontSize: 14, fontWeight: "bold" },
   loginDayReward: { color: "#ffd700", fontSize: 10 },
   checkMark: { color: "#4CAF50", fontSize: 14, fontWeight: "bold" },

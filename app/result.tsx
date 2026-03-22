@@ -7,6 +7,19 @@ import { generateShareCard } from "../lib/share/generateShareCard";
 import { useRanking } from "../hooks/useRanking";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+const DAILY_CONSTRAINT_EXPRESSIONS_RESULT = ["angry", "surprise", "sad", "happy"] as const;
+const EXPRESSION_EMOJIS_RESULT: Record<string, string> = {
+  angry: "😡", surprise: "😲", sad: "😢", happy: "😊",
+};
+function getNextDailyConstraintEmoji(): string {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((now.getTime() - start.getTime()) / 86400000);
+  const tomorrowIndex = (dayOfYear + 1) % 4;
+  const expr = DAILY_CONSTRAINT_EXPRESSIONS_RESULT[tomorrowIndex];
+  return EXPRESSION_EMOJIS_RESULT[expr] ?? "❓";
+}
+
 const RANK_COLORS: Record<RankGrade, string> = {
   S: "#ffd700", A: "#4CAF50", B: "#2196F3", C: "#9e9e9e", D: "#795548",
 };
@@ -194,11 +207,10 @@ export default function ResultScreen() {
 
   const handleShare = async () => {
     const stageName = stage?.name ?? stageId;
-    const streakText = loginStreak >= 2 ? ` ${loginStreak}\u65E5\u9023\u7D9A\uD83D\uDD25` : "";
-    const dailyPrefix = dailyMode ? "\uD83D\uDCC5 \u30C7\u30A4\u30EA\u30FC\u6311\u6226 " : "";
-    const dailyTags = dailyMode ? " #\u9854\u30D0\u30C8\u30EB\u30C7\u30A4\u30EA\u30FC #FaceFightDaily" : "";
-    const enragedBoast = todayEnragedKills > 0 ? ` 激怒状態で${todayEnragedKills}体撃破💥` : "";
-    const text = `🔥 顔バトル${enragedBoast}\n${stageName} ${won ? "クリア！" : "挑戦中..."}\n${RANK_EMOJIS[rank]} ランク${rank} 👊スコア${score.toLocaleString()} コンボ x${maxCombo}\nあなたは激怒撃破できる？▼\n#顔バトル #FaceFight #表情ゲーム #カメラゲーム${dailyTags}`;
+    const defeatEmoji = ["😤", "😩", "😭", "🤬"][Math.floor(Math.random() * 4)];
+    const text = won
+      ? `🔥 顔バトル\n${stageName} クリア！\nスコア${score.toLocaleString()} コンボ x${maxCombo}\nあなたも激怒撃破に挑戦？\n#顔バトル #FaceFight #表情ゲーム`
+      : `${defeatEmoji} 顔バトル 撃沈...\n${stageName} でやられた！\nスコア${score.toLocaleString()} コンボ x${maxCombo}\n変顔でリベンジしてみて👇\n#顔バトル #FaceFight #変顔チャレンジ`;
 
     if (Platform.OS === "web") {
       // Try Web Share API with share card image
@@ -352,6 +364,28 @@ export default function ResultScreen() {
         </View>
       )}
 
+      {/* Daily clear + tomorrow's constraint preview */}
+      {dailyMode && won && (
+        <View style={{
+          backgroundColor: "rgba(255, 215, 0, 0.15)",
+          borderRadius: 12,
+          padding: 12,
+          marginBottom: 8,
+          borderWidth: 1,
+          borderColor: "#ffd700",
+          alignItems: "center",
+          width: "100%",
+          maxWidth: 300,
+        }}>
+          <Text style={{ color: "#ffd700", fontSize: 15, fontWeight: "bold" }}>
+            🗓 デイリークリア！
+          </Text>
+          <Text style={{ color: "#aaa", fontSize: 12, marginTop: 4, textAlign: "center" }}>
+            明日の縛り: {getNextDailyConstraintEmoji()} が使えるのみ！
+          </Text>
+        </View>
+      )}
+
       {/* Share feedback */}
       {shareText && (
         <View style={styles.shareFeedback}>
@@ -361,8 +395,8 @@ export default function ResultScreen() {
 
       <View style={styles.buttons}>
         {/* Share button */}
-        <TouchableOpacity style={styles.shareBtn} onPress={handleShare}>
-          <Text style={styles.shareBtnText}>{"\uD83D\uDCE4 \u7D50\u679C\u3092\u30B7\u30A7\u30A2"}</Text>
+        <TouchableOpacity style={won ? styles.shareBtn : styles.shareBtn_defeat} onPress={handleShare}>
+          <Text style={styles.shareBtnText}>{won ? "📤 結果をシェア" : "😤 変顔をシェアして自慢する"}</Text>
         </TouchableOpacity>
 
         {/* Download share card button */}
@@ -512,6 +546,14 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     borderWidth: 1,
     borderColor: "#4fc3f7",
+  },
+  shareBtn_defeat: {
+    backgroundColor: "rgba(233,69,96,0.2)",
+    paddingVertical: 14,
+    paddingHorizontal: 36,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: "#e94560",
   },
   shareBtnText: { color: "#4fc3f7", fontSize: 16, fontWeight: "bold" },
   downloadBtn: {

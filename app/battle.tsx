@@ -122,6 +122,9 @@ export default function BattleScreen() {
   const skillEffectOpacity = useRef(new Animated.Value(0)).current;
   const skillEffectTranslateX = useRef(new Animated.Value(0)).current;
 
+  // Loading bar animation
+  const loadingBarAnim = useRef(new Animated.Value(0)).current;
+
   // Calibration check
   const [calibrationChecked, setCalibrationChecked] = useState(false);
 
@@ -144,6 +147,10 @@ export default function BattleScreen() {
   // Enraged mode flash
   const [enragedMode, setEnragedMode] = useState(false);
   const enrageFlashOpacity = useRef(new Animated.Value(0)).current;
+
+  // Expression feedback label
+  const [expressionFeedbackLabel, setExpressionFeedbackLabel] = useState<string>("");
+  const expressionFeedbackOpacity = useRef(new Animated.Value(0)).current;
 
   // Enemy speech bubble
   const [speechBubble, setSpeechBubble] = useState<string | null>(null);
@@ -173,6 +180,18 @@ export default function BattleScreen() {
     loop.start();
     return () => loop.stop();
   }, []);
+
+  // Loading bar animation for MediaPipe
+  useEffect(() => {
+    if (mpStatus === "loading") {
+      loadingBarAnim.setValue(0);
+      Animated.timing(loadingBarAnim, {
+        toValue: 1, duration: 10000, useNativeDriver: false,
+      }).start();
+    } else {
+      loadingBarAnim.stopAnimation();
+    }
+  }, [mpStatus]);
 
   // Show tutorial on first fight
   useEffect(() => {
@@ -305,6 +324,13 @@ export default function BattleScreen() {
 
         // Capture frame on skill activation (max 5)
         captureAndStore(expression.scores[expression.dominant]);
+
+        // Expression feedback label
+        const feedbackEmoji = EXPRESSION_EMOJI[expression.dominant];
+        const feedbackLabel = EXPRESSION_LABELS[expression.dominant];
+        setExpressionFeedbackLabel(`${feedbackEmoji} ${feedbackLabel}！`);
+        expressionFeedbackOpacity.setValue(1);
+        Animated.timing(expressionFeedbackOpacity, { toValue: 0, duration: 800, useNativeDriver: true }).start();
 
         if (lastDamage.enemyDefeated && state.currentEnemy) {
           showSpeechBubble(lastDamage.defeatLine || "...");
@@ -740,7 +766,19 @@ export default function BattleScreen() {
       {/* MediaPipe loading overlay */}
       {isFighting && mpStatus === "loading" && (
         <View style={styles.mpLoadingOverlay}>
-          <Text style={styles.mpLoadingText}>{"\u9854\u8A8D\u8B58\u3092\u6E96\u5099\u4E2D..."}</Text>
+          <Text style={styles.mpLoadingText}>😊 カメラを顔に向けてください</Text>
+          <Text style={{ color: "#aaa", fontSize: 13, textAlign: "center", marginTop: 8 }}>
+            顔認識を準備中... (初回は5〜10秒かかります)
+          </Text>
+          <View style={{
+            width: 200, height: 4, backgroundColor: "#333",
+            borderRadius: 2, marginTop: 16, overflow: "hidden",
+          }}>
+            <Animated.View style={{
+              height: 4, backgroundColor: "#e94560", borderRadius: 2,
+              width: loadingBarAnim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }),
+            }} />
+          </View>
         </View>
       )}
 
@@ -917,9 +955,9 @@ export default function BattleScreen() {
                     playsInline
                     muted
                     style={{
-                      width: 88,
-                      height: 88,
-                      borderRadius: 44,
+                      width: 120,
+                      height: 120,
+                      borderRadius: 60,
                       objectFit: "cover",
                       transform: "scaleX(-1)",
                     } as any}
@@ -928,7 +966,12 @@ export default function BattleScreen() {
                   <>
                     <Text style={styles.cameraEmoji}>{EXPRESSION_EMOJI[expression.dominant]}</Text>
                     {cameraError && (
-                      <Text style={styles.cameraErrorText}>{"\uD83D\uDCF7"}</Text>
+                      <View style={{ alignItems: "center" }}>
+                        <Text style={styles.cameraErrorText}>📷</Text>
+                        <Text style={{ color: "#e94560", fontSize: 10, textAlign: "center" }}>
+                          カメラOFFでもボタンで操作可
+                        </Text>
+                      </View>
                     )}
                   </>
                 )}
@@ -964,6 +1007,23 @@ export default function BattleScreen() {
                 },
               ]}
             />
+            {/* Expression feedback label */}
+            <Animated.Text
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                bottom: -28,
+                alignSelf: "center",
+                color: "#ffd700",
+                fontSize: 16,
+                fontWeight: "bold",
+                opacity: expressionFeedbackOpacity,
+                textShadowColor: "#000",
+                textShadowRadius: 4,
+              }}
+            >
+              {expressionFeedbackLabel}
+            </Animated.Text>
             {/* REC indicator */}
             <Animated.View style={[styles.recBadge, { opacity: recBlink }]}>
               <View style={styles.recDot} />
@@ -1236,9 +1296,9 @@ const styles = StyleSheet.create({
     minWidth: 240,
   },
   cameraFrame: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 120,
+    height: 124,
+    borderRadius: 62,
     backgroundColor: "#0f3460",
     alignItems: "center",
     justifyContent: "center",
@@ -1267,7 +1327,7 @@ const styles = StyleSheet.create({
   cornerBR: { bottom: 4, right: 4, borderBottomWidth: 2, borderRightWidth: 2 },
   cameraColorOverlay: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 44,
+    borderRadius: 60,
   },
   skillRing: {
     position: "absolute",
